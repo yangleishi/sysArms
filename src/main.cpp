@@ -71,23 +71,6 @@ static void ininClient()
 int main(int argc, char **argv)
 {
     SUPR::dmsAppStartUp();
-
-#if  clientudp
-    ininClient();
-
-    while (suprWorking)
-    {
-      // 向服务器发送数据，sendto() ；
-      int send_length = 0;
-      sprintf(sendline,"hello server!");
-      send_length = sendto(confd, sendline, sizeof(sendline), 0, (struct sockaddr *) &serveraddr, addr_length);
-      if(send_length > 0)
-      {
-          printf("%s\t", sendline);
-      }
-      usleep(10000);
-    }
-#endif
     return 0;
 }
 
