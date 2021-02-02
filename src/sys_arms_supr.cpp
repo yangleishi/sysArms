@@ -18,12 +18,14 @@
 #include "sys_arms_conf.hpp"
 #include "sys_arms_daemon.hpp"
 #include "sys_arms_leader.hpp"
+#include "sys_arms_tension_leader.hpp"
 
 
 namespace SUPR {
 
 //thread parame
 BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_ARMS_NUMS];
+BASE::ARMS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
 
 typedef struct _MODULEINFOS {
   const char* mName;
@@ -34,7 +36,7 @@ typedef struct _MODULEINFOS {
 } MODULEINFOS;
 
 
-MODULEINFOS gHiMInfo[CONF::ARMS_M_MAX_ID];
+MODULEINFOS gHiMInfo[CONF::ARMS_M_MAX_ID + DEF_SYS_TENSIONLEADER_NUMS];
 BASE::ARMS_MSGS mArmsMsgs;
 
 
@@ -47,6 +49,7 @@ static int32_t startModules(void);
 static int32_t suprMainLoop();
 static void signalHandle(int mSignal);
 
+static void checkSysError();
 
 static int32_t deInitSupr(void);
 ////////////////////////////////////////////////////////////////////////////////
@@ -55,6 +58,8 @@ static int32_t deInitSupr(void);
 
 static int latency_target_fd = -1;
 static int32_t latency_target_value = 0;
+
+static BASE::M_STATE mSysState = BASE::M_STATE_INIT;
 
 /* Latency trick
  * if the file /dev/cpu_dma_latency exists,
@@ -160,10 +165,7 @@ static int32_t startModules(void) {
 //  BASE::hiGetThreadPri(pthread_self());
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < CONF::ARMS_M_MAX_ID; qIdx++)
   {
-    //mArmsModule[qIdx-1].mMsgId   = qIdx-1;
     mArmsModule[qIdx-1].mWorking = true;
-    //memcpy(mArmsModule[qIdx-1].mIpV4Str, CONF::MN_SERVER_IP[qIdx-1], sizeof(CONF::MN_SERVER_IP[qIdx-1]));
-    //test
     memcpy(mArmsModule[qIdx-1].mIpV4Str, CONF::MN_SERVER_IP[qIdx-1], sizeof(CONF::MN_SERVER_IP[qIdx-1]));
     mArmsModule[qIdx-1].mSerPort = CONF::MN_SERVER_PORT[qIdx-1];
     mArmsModule[qIdx-1].mState = BASE::M_STATE_INIT;
@@ -178,17 +180,67 @@ static int32_t startModules(void) {
                                                  &mArmsModule[qIdx-1]);
     //printf("pid:%u\t", gHiMInfo[qIdx].mPid);
   }
+
+
+ // tension thread
+  for (qIdx = CONF::ARMS_T_1_ID; qIdx < CONF::ARMS_T_MAX_ID; qIdx++)
+  {
+    mArmsTension[qIdx].mWorking = true;
+    memcpy(mArmsTension[qIdx].mIpV4Str, CONF::MN_TENSION_SERVER_IP[qIdx], sizeof(CONF::MN_TENSION_SERVER_IP[qIdx]));
+    mArmsTension[qIdx].mSerPort = CONF::MN_TENSION_SERVER_PORT[qIdx];
+  }
+
+
+  for (qIdx = CONF::ARMS_T_1_ID; qIdx < CONF::ARMS_T_MAX_ID; qIdx++)
+  {
+    gHiMInfo[qIdx+CONF::ARMS_M_MAX_ID].mPid   = BASE::hiCreateThread(CONF::MN_TENSION_NAME[qIdx],
+                                                                     TENSIONLEADER::threadEntry,
+                                                                     CONF::PRI_LEAD,
+                                                                     &mArmsTension[qIdx]);
+    //printf("pid:%u\t", gHiMInfo[qIdx].mPid);
+  }
   return 0;
 }
 
 
+static void checkSysError()
+{
+  int32_t iRet = 0;
+
+  for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+  {
+    if(!mArmsModule[qIdx].mWorking)
+      iRet++;
+  }
+
+  //no arm stop
+  if(iRet == 0)
+    return;
+
+  //all stop
+  if(iRet == DEF_SYS_ARMS_NUMS)
+  {
+    suprWorking = 0;
+    for (int qIdx = 0; qIdx < DEF_SYS_TENSIONLEADER_NUMS; qIdx++)
+      mArmsTension[qIdx].mWorking = false;
+  }
+
+
+  if(iRet != 0)
+  {
+    for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+      if(mArmsModule[qIdx].mWorking)
+          mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
+  }
+
+}
+
 static int32_t suprMainLoop(){
   //TODU
   struct timespec now, next, interval;
-  unsigned int nDelay = 990;        /* usec */
+  unsigned int nDelay = 1000;        /* usec */
 
   int  ret;
-  int64_t diff, max = 0, printfIndex = 0;
 
   while(suprWorking)
   {
@@ -209,36 +261,28 @@ static int32_t suprMainLoop(){
         continue;
      }
 
+
+    // if one arm error then set other stop
+    checkSysError();
+
     for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
     {
-      clock_gettime(CLOCK_MONOTONIC, & mArmsModule[qIdx].startTime);
       pthread_cond_signal(&mArmsModule[qIdx].mArmsMsgReady);
     }
-
-      /*
-    if ((ret = clock_gettime(CLOCK_MONOTONIC, &now))) {
-        if (ret != EINTR)
-            printf("clock_getttime() failed. errno: %d\n", errno);
-        continue;
-    }
-
-    diff = calcdiff_ns(now, next);
-    if(diff > max)
-      max = diff;
-    */
-    //timeout notice cond
 
   }
 }
 
 static void signalHandle(int mSignal)
 {
-  suprWorking = 0;
+  //suprWorking = 0;
 
+  mSysState = BASE::M_STATE_STOP;
   for (int32_t qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
   {
-    mArmsModule[qIdx].mWorking = false;
+    //mArmsModule[qIdx].mWorking = false;
     // cond
+    mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
     pthread_cond_signal(&mArmsModule[qIdx].mArmsMsgReady);
   }
 
@@ -281,7 +325,7 @@ int32_t dmsAppStartUp() {
 
   printf("quit dms partial modules for begin re-program ");
   int32_t qIdx = CONF::ARMS_M_SUPR_ID;
-  for (qIdx = CONF::ARMS_M_SUPR_ID+1; qIdx < CONF::ARMS_M_MAX_ID; qIdx++) {
+  for (qIdx = CONF::ARMS_M_SUPR_ID+1; qIdx < CONF::ARMS_M_MAX_ID + DEF_SYS_TENSIONLEADER_NUMS; qIdx++) {
     printf("live until re-program qIdx=%d\n", qIdx);
     pthread_join(gHiMInfo[qIdx].mPid, NULL);
   }

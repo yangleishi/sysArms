@@ -16,12 +16,17 @@
 #include "sys_arms_defs.h"
 namespace LEADER {
 
-static int initServer(BASE::ARMS_THREAD_INFO *pTModule);
+static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdNonblocking(int sockfd);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
 
+///msg functions/////////////////
+static int packageFrame(BASE::ARMS_S_MSG* pMsg, uint8_t mCtrl, BASE::MOTORS &mMotors, uint16_t mCrcCode);
+
+//pTmodule cmd or data send to client
+static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint16_t mCrcCode);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -89,6 +94,42 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
   printf("endup  ");
   return 0;
 }
+
+
+///msg functions/////////////////
+static int packageFrame(BASE::ARMS_S_MSG* pMsg, uint8_t mCtrl, BASE::MOTORS &mMotors, uint16_t mCrcCode)
+{
+  int32_t iRet = 0;
+  if(pMsg == NULL)
+  {
+    return -1;
+  }
+
+  struct timespec now;
+
+  pMsg->mIdentifier = 0x88;
+  pMsg->mCtrl  = mCtrl;
+  memcpy((char*)&(pMsg->mMotors), (char*)&mMotors, sizeof(mMotors));
+  pMsg->mSysState = 0;
+
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  pMsg->mSysTime.mSysTimeS  = now.tv_sec;
+  pMsg->mSysTime.mSysTimeUs = now.tv_nsec/1000;
+
+  pMsg->mDataLength = sizeof(BASE::MOTORS);
+
+  pMsg->mCrcCode = mCrcCode;
+
+  return iRet;
+}
+
+static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint16_t mCrcCode)
+{
+  int32_t iRet = 0;
+  packageFrame(&pTModule->mSendMsg, mCtrl, mMotors, mCrcCode);
+  sendto(pTModule->mSocket, &pTModule->mSendMsg, sizeof(BASE::ARMS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
+  return  iRet;
+}
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -119,13 +160,20 @@ void* threadEntry(void* pModule)
 
   socklen_t mun = sizeof(pTModule->mPeerAddr);
 
-  BASE::ARMS_MSG mRec;
+  //BASE::ARMS_S_MSG mRec, mSendMsg;
+  //BASE::MOTORS   mMotors;
 
   int lossF = 0;
   uint16_t  cRc = 0;
   clock_gettime(CLOCK_MONOTONIC, &pfTime1);
 
   static int64_t maxDiff = 0;
+
+  //uint32_t mArmsState = -1;
+  uint16_t mCrc = 0;
+  //motors data
+  BASE::MOTORS lMotors;
+  uint32_t     lArmsStateCode;
 
   //running state
   while(pTModule->mWorking)
@@ -137,39 +185,68 @@ void* threadEntry(void* pModule)
 
     pthread_mutex_unlock(&pTModule->mArmsMsgMutex);
 
-    clock_gettime(CLOCK_MONOTONIC, &pfTime2);
-
-    diff = calcdiff_ns(pfTime2, pTModule->startTime);
-    diff /= 1000;
-    if(diff > maxDiff)
-        maxDiff = diff;
-    //printf("** diff:%d   maxdiff:%d\n", diff, maxDiff);
-
-
     //rec UDP
-    int size = recvfrom(pTModule->mSocket , (char*)&mRec, sizeof(BASE::ARMS_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
+    int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
 
-    if(size > 0)
+    //TUDO*****
+    if(size != sizeof(BASE::ARMS_R_MSG))
+      continue;
+
+    lArmsStateCode = pTModule->mRecMsg.mSysState;
+
+    //send
+    switch (pTModule->mState)
     {
-      if(size != sizeof(BASE::ARMS_MSG))
+      case BASE::M_STATE_INIT:
       {
-         lossF++;
-         printf("*******************************size***********: %d", size);
-         continue;
+        if(lArmsStateCode == BASE::ST_SYS_POWERON_OK)
+        {
+          //TUDO send 0 let arms wait
+          memset((char*)&lMotors, 0, sizeof(lMotors));
+          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
+          pTModule->mState = BASE::M_STATE_RUN;
+          break;
+        }
+        //power on
+        motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_POWERON, mCrc);
+        break;
       }
+      case BASE::M_STATE_RUN:
+      {
+        //TUDO
+        if(lArmsStateCode == BASE::ST_SYS_FIRE_OK)
+        {
+          //TUDO cal******
 
-      if(cRc != mRec.mCrcCode && mRec.mCrcCode != 0)
-      {
-          lossF++;
-          cRc = mRec.mCrcCode;
+          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
+        }
+        else
+        {
+          printf("error code:%d\n", lArmsStateCode);
+          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_UNFIRE, mCrc);
+          pTModule->mState = BASE::M_STATE_STOP;
+        }
+        break;
       }
-      printf("size:%d, say: %d  loss:%d\n", size, mRec.mCrcCode,lossF);
-      sendto(pTModule->mSocket, &mRec, sizeof(BASE::ARMS_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr),sizeof(pTModule->mPeerAddr));
-      cRc++;
+      case BASE::M_STATE_STOP:
+      {
+        if(lArmsStateCode != BASE::ST_SYS_STOP_OK)
+        {
+          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_UNFIRE, mCrc);
+          break;
+        }
+
+        //over while
+        pTModule->mWorking = false;
+        break;
+      }
+      default:
+      {
+        break;
+      }
     }
-    else {
-      //printf("timeout size:%d", size);
-    }
+
+    mCrc++;
   }
 
   moduleEndUp(pTModule);
