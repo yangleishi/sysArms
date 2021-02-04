@@ -47,7 +47,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   }
 
   //setFdNonblocking(pTModule->mSocket);
-  setFdTimeout(pTModule->mSocket, 0, CONF::SERVER_UDP_TENSION_TIMEOUT);
+  setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TENSION_TIMEOUT_S, CONF::SERVER_UDP_TENSION_TIMEOUT_US);
 
   bzero(&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
   pTModule->mSerAddr.sin_family = AF_INET;
@@ -73,7 +73,7 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  printf("endup  ");
+  printf("tension leader endup\n");
   return 0;
 }
 
@@ -90,7 +90,7 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    printf("bind server ip failed, check network again !\n");
+    printf("bind server ip failed, check network!\n");
     moduleEndUp(pTModule);
     return 0;
   }
@@ -109,7 +109,10 @@ void* threadEntry(void* pModule)
 
     //TUDO*****
     if(size != sizeof(BASE::ARMS_TENSIONS_MSG))
+    {
+      printf("tension thread rec overtime or error!\n");
       continue;
+    }
 
     //rec tension data
 

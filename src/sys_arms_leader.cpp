@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <errno.h>
 
 
 
@@ -66,7 +67,9 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   }
 
   //setFdNonblocking(pTModule->mSocket);
-  setFdTimeout(pTModule->mSocket, 0, CONF::SERVER_UDP_TIMEOUT);
+  setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TIMEOUT_S, CONF::SERVER_UDP_TIMEOUT_US);
+
+  bzero(&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
 
   bzero(&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
   pTModule->mSerAddr.sin_family = AF_INET;
@@ -127,7 +130,7 @@ static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors,
 {
   int32_t iRet = 0;
   packageFrame(&pTModule->mSendMsg, mCtrl, mMotors, mCrcCode);
-  sendto(pTModule->mSocket, &pTModule->mSendMsg, sizeof(BASE::ARMS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
+  iRet = sendto(pTModule->mSocket, &pTModule->mSendMsg, sizeof(BASE::ARMS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
   return  iRet;
 }
 ////////////////////////////////////////////////////////////////////////////////
@@ -152,6 +155,7 @@ void* threadEntry(void* pModule)
   {
     printf("bind server ip failed, check network again !\n");
     moduleEndUp(pTModule);
+    pTModule->mWorking = false;
     return 0;
   }
 
@@ -187,12 +191,8 @@ void* threadEntry(void* pModule)
 
     //rec UDP
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-
     //TUDO*****
-    if(size != sizeof(BASE::ARMS_R_MSG))
-      continue;
-
-    lArmsStateCode = pTModule->mRecMsg.mSysState;
+    lArmsStateCode = (size != sizeof(BASE::ARMS_R_MSG)) ? BASE::ST_SYS_REC_ERROR : pTModule->mRecMsg.mSysState;
 
     //send
     switch (pTModule->mState)
@@ -208,7 +208,8 @@ void* threadEntry(void* pModule)
           break;
         }
         //power on
-        motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_POWERON, mCrc);
+        int iRet =  motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_POWERON, mCrc);
+
         break;
       }
       case BASE::M_STATE_RUN:
@@ -230,14 +231,14 @@ void* threadEntry(void* pModule)
       }
       case BASE::M_STATE_STOP:
       {
-        if(lArmsStateCode != BASE::ST_SYS_STOP_OK)
+        motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_UNFIRE, mCrc);
+
+        //stop ok and recMsg error,then endup.
+        if(lArmsStateCode == BASE::ST_SYS_STOP_OK || lArmsStateCode == BASE::ST_SYS_REC_ERROR)
         {
-          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_UNFIRE, mCrc);
+          pTModule->mWorking = false;
           break;
         }
-
-        //over while
-        pTModule->mWorking = false;
         break;
       }
       default:

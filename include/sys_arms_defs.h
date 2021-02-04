@@ -18,6 +18,9 @@
 
 #define STR_IPV4_LENGTH     16
 
+#define	PRINT_QUEUE_MAX_ITEMS		1024
+#define	PRINT_STRING_MAX_LENGTH		128
+
 namespace BASE {
 
 //////////////////////////////////// System internal structure  /////////////////////////////////////
@@ -51,9 +54,24 @@ const uint16_t   ST_SYS_FIRE_OK           = 0x0002;
 const uint16_t   ST_SYS_STOP_OK           = 0x0003;
 
 const uint16_t   ST_SYS_KNOCK             = 0xFFFF;
-//const uint16_t   ST_SYS_PRKNOCK           = 0xFFFE;
+const uint16_t   ST_SYS_PRKNOCK           = 0xFFFE;
+
+const uint16_t   ST_SYS_REC_ERROR         = 0xFFF0;
 
 ///end of udp msg state part
+
+////////////////////////////////////printf queue /////////////////////////////////////
+typedef struct
+{
+  char  mString[PRINT_STRING_MAX_LENGTH];
+} PRINT_STR;
+
+typedef struct
+{
+  PRINT_STR mPrintPond[PRINT_QUEUE_MAX_ITEMS];	// 循环队列的缓冲区
+  uint32_t mFront;		// 循环队列的头指针
+  uint32_t mRear;		// 循环队列的尾指针
+} STR_QUEUE;
 
 ///////////////////////////////////
 //Motor control data
@@ -180,6 +198,19 @@ typedef struct
 //  Each thread runs parameters
 typedef struct
 {
+  bool             mWorking;
+  M_STATE          mState;
+  pthread_cond_t   mPrintQueueReady;
+
+  //pthread_mutex_t  mLogMsgMutex;
+  //pthread_cond_t   mLogMsgReady;
+
+  //pthread_mutex_t  mPrintQueueMutex;
+  //STR_QUEUE*       mQueue;
+} LOG_THREAD_INFO;
+
+typedef struct
+{
   bool         mWorking;
   uint32_t     mSocket;
   sockaddr_in  mSerAddr, mPeerAddr;
@@ -192,7 +223,6 @@ typedef struct
   ARMS_R_MSG      mRecMsg;
   ARMS_S_MSG      mSendMsg;
 } ARMS_THREAD_INFO;
-
 
 
 }  //namespace

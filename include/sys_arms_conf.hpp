@@ -26,14 +26,20 @@ typedef enum {
   ARMS_M_10_ID,
   ARMS_M_11_ID,
   ARMS_M_MAX_ID,
-} DMS_MODULE_NAME_ID;
+} MODULE_NAME_ID;
 
 typedef enum {
   ARMS_T_1_ID = 0,
   ARMS_T_2_ID,
   ARMS_T_MAX_ID,
-} DMS_MODULE_TENSION_NAME_ID;
+} MODULE_TENSION_NAME_ID;
 
+typedef enum {
+  ARMS_LOG_1_ID = 0,
+  ARMS_LOG_MAX_ID,
+} MODULE_LOGER_NAME_ID;
+
+#define MODULES_NUMS (CONF::ARMS_M_MAX_ID + CONF::ARMS_T_MAX_ID + CONF::ARMS_LOG_MAX_ID)
 //MN=Module Name
 //
 /*
@@ -49,6 +55,7 @@ const char MN_NAME[][15] = {"MN_SUPR", "MN_SERVER1", "MN_SERVER2",
 
 const char MN_TENSION_NAME[][15] = {"MN_TENSION1", "MN_TENSION2"};
 
+const char MN_LOG_NAME[] = "MN_LOGS";
 /*
 const char MN_SERVER_IP[][16] = {"127.0.0.0", "127.0.0.0", "127.0.0.0",
                                  "127.0.0.0", "127.0.0.0", "127.0.0.0",
@@ -71,9 +78,13 @@ const int  MN_SERVER_PORT[DEF_SYS_ARMS_NUMS + 1] = { 8001, 8002, 8003,
 
 const int  MN_TENSION_SERVER_PORT[DEF_SYS_TENSIONLEADER_NUMS + 1] = { 9001, 9002, 9003};
 
-const int SERVER_UDP_TIMEOUT = 5000;
+//m us
+const int SERVER_UDP_TIMEOUT_S = 0;
+const int SERVER_UDP_TIMEOUT_US = 5000;
 
-const int SERVER_UDP_TENSION_TIMEOUT = 1000000;
+//m us
+const int SERVER_UDP_TENSION_TIMEOUT_S = 0;
+const int SERVER_UDP_TENSION_TIMEOUT_US = 900000;
 
 //Define priority for modules
 const int PRI_SUPR = 50;

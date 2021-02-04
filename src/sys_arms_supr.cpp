@@ -18,6 +18,7 @@
 #include "sys_arms_conf.hpp"
 #include "sys_arms_daemon.hpp"
 #include "sys_arms_leader.hpp"
+#include "sys_arms_loger.hpp"
 #include "sys_arms_tension_leader.hpp"
 
 
@@ -26,6 +27,7 @@ namespace SUPR {
 //thread parame
 BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_ARMS_NUMS];
 BASE::ARMS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
+BASE::LOG_THREAD_INFO  mlogsModule;
 
 typedef struct _MODULEINFOS {
   const char* mName;
@@ -35,10 +37,9 @@ typedef struct _MODULEINFOS {
 
 } MODULEINFOS;
 
-
-MODULEINFOS gHiMInfo[CONF::ARMS_M_MAX_ID + DEF_SYS_TENSIONLEADER_NUMS];
+//arms,tensions,logs threads and supr
+MODULEINFOS gHiMInfo[MODULES_NUMS];
 BASE::ARMS_MSGS mArmsMsgs;
-
 
 static int suprWorking = 1;
 
@@ -143,6 +144,9 @@ static int32_t initSupr(void) {
     pthread_cond_init(&mArmsModule[qIdx].mArmsMsgReady, NULL);
   }
 
+  //queue cond
+  pthread_cond_init(&mlogsModule.mPrintQueueReady, NULL);
+
   signal(SIGINT, signalHandle);
 
   ///////cpu latency set 0us
@@ -161,8 +165,15 @@ static int32_t startModules(void) {
   printf("startModule");
   int32_t qIdx = CONF::ARMS_M_SUPR_ID;
 
+  // logs thread
+  mArmsTension[CONF::ARMS_T_MAX_ID+CONF::ARMS_M_MAX_ID].mWorking = true;
+  gHiMInfo[CONF::ARMS_T_MAX_ID+CONF::ARMS_M_MAX_ID].mPid         = BASE::hiCreateThread(
+                                                                     CONF::MN_LOG_NAME,
+                                                                     LOGER::threadEntry,
+                                                                     CONF::PRI_LEAD,
+                                                                     &mlogsModule);
 
-//  BASE::hiGetThreadPri(pthread_self());
+// arms threads
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < CONF::ARMS_M_MAX_ID; qIdx++)
   {
     mArmsModule[qIdx-1].mWorking = true;
@@ -182,7 +193,7 @@ static int32_t startModules(void) {
   }
 
 
- // tension thread
+// tension threads
   for (qIdx = CONF::ARMS_T_1_ID; qIdx < CONF::ARMS_T_MAX_ID; qIdx++)
   {
     mArmsTension[qIdx].mWorking = true;
@@ -199,6 +210,7 @@ static int32_t startModules(void) {
                                                                      &mArmsTension[qIdx]);
     //printf("pid:%u\t", gHiMInfo[qIdx].mPid);
   }
+
   return 0;
 }
 
@@ -261,7 +273,6 @@ static int32_t suprMainLoop(){
         continue;
      }
 
-
     // if one arm error then set other stop
     checkSysError();
 
@@ -270,13 +281,14 @@ static int32_t suprMainLoop(){
       pthread_cond_signal(&mArmsModule[qIdx].mArmsMsgReady);
     }
 
+    //notice loger cycle log
+    pthread_cond_signal(&mlogsModule.mPrintQueueReady);
+
   }
 }
 
 static void signalHandle(int mSignal)
 {
-  //suprWorking = 0;
-
   mSysState = BASE::M_STATE_STOP;
   for (int32_t qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
   {
@@ -285,7 +297,7 @@ static void signalHandle(int mSignal)
     mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
     pthread_cond_signal(&mArmsModule[qIdx].mArmsMsgReady);
   }
-
+  //suprWorking = 0;
   printf("oops! stop!!!\n");
 }
 
@@ -299,6 +311,8 @@ static int32_t deInitSupr(void)
     pthread_cond_destroy(&mArmsModule[qIdx].mArmsMsgReady);
     //printf("pid:%u\t", gHiMInfo[qIdx].mPid);
   }
+
+  pthread_cond_destroy(&mlogsModule.mPrintQueueReady);
 
   /* close the latency_target_fd if it's open */
   if (latency_target_fd >= 0)
@@ -329,6 +343,10 @@ int32_t dmsAppStartUp() {
     printf("live until re-program qIdx=%d\n", qIdx);
     pthread_join(gHiMInfo[qIdx].mPid, NULL);
   }
+
+  //wait loger quit
+  mlogsModule.mWorking = false;
+  pthread_join(gHiMInfo[MODULES_NUMS-1].mPid, NULL);
 
   deInitSupr();
 
