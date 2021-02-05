@@ -13,6 +13,7 @@
 #include "sys_arms_tension_leader.hpp"
 #include "sys_arms_defs.h"
 #include "sys_arms_conf.hpp"
+#include "sys_arms_loger.hpp"
 
 
 namespace TENSIONLEADER {
@@ -32,7 +33,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   timeout.tv_usec = mUsec;//微秒
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
   {
-    printf("setsockopt failed:");
+    LOGER::PrintfLog("setsockopt failed:");
   }
 }
 
@@ -42,7 +43,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   int32_t iRet = 0;
 
   if((pTModule->mSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-      printf("socket creat Failed");
+      LOGER::PrintfLog("socket creat Failed");
       return -1;
   }
 
@@ -58,7 +59,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
 
   if(iRet < 0)
   {
-    printf("server :%d bind faild", pthread_self());
+    LOGER::PrintfLog("server :%d bind faild", pthread_self());
     return iRet;
   }
 
@@ -73,7 +74,7 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  printf("tension leader endup\n");
+  LOGER::PrintfLog("tension leader endup");
   return 0;
 }
 
@@ -90,7 +91,7 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    printf("bind server ip failed, check network!\n");
+    LOGER::PrintfLog("bind server ip failed, check network!");
     moduleEndUp(pTModule);
     return 0;
   }
@@ -110,7 +111,7 @@ void* threadEntry(void* pModule)
     //TUDO*****
     if(size != sizeof(BASE::ARMS_TENSIONS_MSG))
     {
-      printf("tension thread rec overtime or error!\n");
+      LOGER::PrintfLog("tension thread rec overtime or error!");
       continue;
     }
 

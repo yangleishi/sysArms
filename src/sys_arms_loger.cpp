@@ -24,10 +24,6 @@ static BASE::STR_QUEUE *mQueue = NULL;
 static FILE *   pFile = NULL;
 
 /////queue //////////////
-static BASE::STR_QUEUE * qCreate(void);
-
-static void qDestroy(BASE::STR_QUEUE *q);
-
 static bool qEmpty(BASE::STR_QUEUE *q);
 
 static bool qFull(BASE::STR_QUEUE *q);
@@ -41,25 +37,6 @@ static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-static BASE::STR_QUEUE * qCreate(void)
-{
-  BASE::STR_QUEUE *q = (BASE::STR_QUEUE*)malloc(sizeof(BASE::STR_QUEUE));	// 分配一个队列空间
-  if(NULL == q)	// 分配失败
-    return NULL;
-
-  // 分配成功
-  q->mRear  = 0;
-  q->mFront = 0;
-  return q;
-}
-
-static void qDestroy(BASE::STR_QUEUE *q)
-{
-  if(NULL != q)
-  {
-    free(q);	// 执行销毁操作
-  }
-}
 
 static bool qEmpty(BASE::STR_QUEUE *q)
 {
@@ -106,8 +83,7 @@ static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
 
-  if((mQueue = qCreate()) == NULL)
-    return -1;
+  mQueue = pTModule->mLogQueue;
 
   pthread_mutex_init(&mPrintQueueMutex, NULL);
 
@@ -123,7 +99,6 @@ static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule)
 
 static int moduleEndUp(BASE::LOG_THREAD_INFO *pTModule)
 {
-  qDestroy(mQueue);
   mQueue = NULL;
 
   pthread_mutex_destroy(&mPrintQueueMutex);
@@ -146,8 +121,12 @@ void* threadEntry(void* pModule)
     return 0;
   }
 
+  if(initLoger(pTModule) != 0)
+    pTModule->mState = BASE::M_STATE_STOP;
+
   BASE::PRINT_STR mLog;
   //running state
+  pTModule->mState = BASE::M_STATE_RUN;
   while(pTModule->mWorking)
   {
     //TUDO*****
@@ -158,6 +137,7 @@ void* threadEntry(void* pModule)
     while(qDelete(mQueue, mLog.mString))
     {
       fprintf(pFile,"%s\n", mLog.mString);
+      //printf("************%s\n", mLog.mString);
     }
     pthread_mutex_unlock(&mPrintQueueMutex);
 
@@ -169,6 +149,9 @@ void* threadEntry(void* pModule)
 
 void PrintfLog(const char *fm, ...)
 {
+  if(mQueue == NULL)
+    return ;
+
   BASE::PRINT_STR mStr;
   memset(mStr.mString, 0, PRINT_STRING_MAX_LENGTH);
   va_list args;

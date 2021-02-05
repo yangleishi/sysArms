@@ -28,6 +28,8 @@ namespace SUPR {
 BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_ARMS_NUMS];
 BASE::ARMS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
 BASE::LOG_THREAD_INFO  mlogsModule;
+static BASE::STR_QUEUE *mLogQueue = NULL;
+
 
 typedef struct _MODULEINFOS {
   const char* mName;
@@ -49,7 +51,7 @@ static void changeSuprThreadInfo(void);
 static int32_t startModules(void);
 static int32_t suprMainLoop();
 static void signalHandle(int mSignal);
-
+static BASE::STR_QUEUE * qCreate(void);
 static void checkSysError();
 
 static int32_t deInitSupr(void);
@@ -101,6 +103,18 @@ static void set_latency_target(void)
     printf("# /dev/cpu_dma_latency set to %dus\n", latency_target_value);
 }
 
+static BASE::STR_QUEUE * qCreate(void)
+{
+  BASE::STR_QUEUE *q = (BASE::STR_QUEUE*)malloc(sizeof(BASE::STR_QUEUE));	// 分配一个队列空间
+  if(NULL == q)	// 分配失败
+    return NULL;
+
+  // 分配成功
+  q->mRear  = 0;
+  q->mFront = 0;
+  return q;
+}
+
 static inline void tsnorm(struct timespec *ts)
 {
     while (ts->tv_nsec >= NSEC_PER_SEC) {
@@ -129,9 +143,8 @@ static int32_t prepareEnv(void) {
 
   changeSuprThreadInfo();
 
-  startModules();
-
-  return 0;
+  iRet = startModules();
+  return iRet;
 }
 
 static int32_t initSupr(void) {
@@ -146,6 +159,7 @@ static int32_t initSupr(void) {
 
   //queue cond
   pthread_cond_init(&mlogsModule.mPrintQueueReady, NULL);
+  mLogQueue = qCreate();
 
   signal(SIGINT, signalHandle);
 
@@ -166,17 +180,18 @@ static int32_t startModules(void) {
   int32_t qIdx = CONF::ARMS_M_SUPR_ID;
 
   // logs thread
-  mArmsTension[CONF::ARMS_T_MAX_ID+CONF::ARMS_M_MAX_ID].mWorking = true;
+  mlogsModule.mWorking = true;
+  mlogsModule.mLogQueue = mLogQueue;
   gHiMInfo[CONF::ARMS_T_MAX_ID+CONF::ARMS_M_MAX_ID].mPid         = BASE::hiCreateThread(
                                                                      CONF::MN_LOG_NAME,
                                                                      LOGER::threadEntry,
                                                                      CONF::PRI_LEAD,
                                                                      &mlogsModule);
-
 // arms threads
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < CONF::ARMS_M_MAX_ID; qIdx++)
   {
     mArmsModule[qIdx-1].mWorking = true;
+    mArmsModule[qIdx-1].mLogQueue = mLogQueue;
     memcpy(mArmsModule[qIdx-1].mIpV4Str, CONF::MN_SERVER_IP[qIdx-1], sizeof(CONF::MN_SERVER_IP[qIdx-1]));
     mArmsModule[qIdx-1].mSerPort = CONF::MN_SERVER_PORT[qIdx-1];
     mArmsModule[qIdx-1].mState = BASE::M_STATE_INIT;
@@ -196,7 +211,8 @@ static int32_t startModules(void) {
 // tension threads
   for (qIdx = CONF::ARMS_T_1_ID; qIdx < CONF::ARMS_T_MAX_ID; qIdx++)
   {
-    mArmsTension[qIdx].mWorking = true;
+    mArmsTension[qIdx].mWorking  = true;
+    mArmsTension[qIdx].mLogQueue = mLogQueue;
     memcpy(mArmsTension[qIdx].mIpV4Str, CONF::MN_TENSION_SERVER_IP[qIdx], sizeof(CONF::MN_TENSION_SERVER_IP[qIdx]));
     mArmsTension[qIdx].mSerPort = CONF::MN_TENSION_SERVER_PORT[qIdx];
   }
@@ -250,7 +266,7 @@ static void checkSysError()
 static int32_t suprMainLoop(){
   //TODU
   struct timespec now, next, interval;
-  unsigned int nDelay = 1000;        /* usec */
+  unsigned int nDelay = 10000;        /* usec */
 
   int  ret;
 
@@ -313,6 +329,11 @@ static int32_t deInitSupr(void)
   }
 
   pthread_cond_destroy(&mlogsModule.mPrintQueueReady);
+  if(mLogQueue != NULL)
+  {
+    free(mLogQueue);
+    mLogQueue = NULL;
+  }
 
   /* close the latency_target_fd if it's open */
   if (latency_target_fd >= 0)
@@ -334,6 +355,7 @@ int32_t dmsAppStartUp() {
 
   iRet = prepareEnv();
   if (0 == iRet) {
+    printf("all modules runing now! ctrl+c to endup\n");
     iRet = suprMainLoop();
   }
 
@@ -344,8 +366,9 @@ int32_t dmsAppStartUp() {
     pthread_join(gHiMInfo[qIdx].mPid, NULL);
   }
 
-  //wait loger quit
+  //notice loger to endup
   mlogsModule.mWorking = false;
+  pthread_cond_signal(&mlogsModule.mPrintQueueReady);
   pthread_join(gHiMInfo[MODULES_NUMS-1].mPid, NULL);
 
   deInitSupr();

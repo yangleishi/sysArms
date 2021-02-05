@@ -11,10 +11,10 @@
 #include <string.h>
 #include <errno.h>
 
-
-
 #include "sys_arms_leader.hpp"
 #include "sys_arms_defs.h"
+#include "sys_arms_loger.hpp"
+
 namespace LEADER {
 
 static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
@@ -37,11 +37,11 @@ static void setFdNonblocking(int sockfd)
 {
     int flag = fcntl(sockfd, F_GETFL, 0);
     if (flag < 0) {
-        printf("fcntl F_GETFL fail");
+        LOGER::PrintfLog("fcntl F_GETFL fail");
         return;
     }
     if (fcntl(sockfd, F_SETFL, flag | O_NONBLOCK) < 0) {
-        printf("fcntl F_SETFL fail");
+        LOGER::PrintfLog("fcntl F_SETFL fail");
     }
 }
 
@@ -53,7 +53,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   timeout.tv_usec = mUsec;//微秒
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
   {
-    printf("setsockopt failed:");
+    LOGER::PrintfLog("setsockopt failed:");
   }
 }
 
@@ -62,7 +62,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   int32_t iRet = 0;
 
   if((pTModule->mSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-      printf("socket creat Failed");
+      LOGER::PrintfLog("socket creat Failed");
       return -1;
   }
 
@@ -80,7 +80,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
 
   if(iRet < 0)
   {
-    printf("server :%d bind faild", pthread_self());
+    LOGER::PrintfLog("server :%d bind faild", pthread_self());
     return iRet;
   }
 
@@ -94,7 +94,7 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  printf("endup  ");
+  LOGER::PrintfLog("endup  ");
   return 0;
 }
 
@@ -153,7 +153,8 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    printf("bind server ip failed, check network again !\n");
+    LOGER::PrintfLog("bind server ip failed, check network again !\n");
+    //printf("bind server ip failed, check network again !\n");
     moduleEndUp(pTModule);
     pTModule->mWorking = false;
     return 0;
@@ -189,6 +190,7 @@ void* threadEntry(void* pModule)
 
     pthread_mutex_unlock(&pTModule->mArmsMsgMutex);
 
+
     //rec UDP
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
     //TUDO*****
@@ -209,7 +211,7 @@ void* threadEntry(void* pModule)
         }
         //power on
         int iRet =  motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_POWERON, mCrc);
-
+        LOGER::PrintfLog("test log hear");
         break;
       }
       case BASE::M_STATE_RUN:
@@ -223,7 +225,7 @@ void* threadEntry(void* pModule)
         }
         else
         {
-          printf("error code:%d\n", lArmsStateCode);
+          LOGER::PrintfLog("error code:%d\n", lArmsStateCode);
           motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_UNFIRE, mCrc);
           pTModule->mState = BASE::M_STATE_STOP;
         }

@@ -202,11 +202,8 @@ typedef struct
   M_STATE          mState;
   pthread_cond_t   mPrintQueueReady;
 
-  //pthread_mutex_t  mLogMsgMutex;
-  //pthread_cond_t   mLogMsgReady;
+  STR_QUEUE* mLogQueue;
 
-  //pthread_mutex_t  mPrintQueueMutex;
-  //STR_QUEUE*       mQueue;
 } LOG_THREAD_INFO;
 
 typedef struct
@@ -222,6 +219,9 @@ typedef struct
 
   ARMS_R_MSG      mRecMsg;
   ARMS_S_MSG      mSendMsg;
+
+  //log queue pri
+  STR_QUEUE* mLogQueue;
 } ARMS_THREAD_INFO;
 
 
