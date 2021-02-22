@@ -180,6 +180,7 @@ void* threadEntry(void* pModule)
   BASE::MOTORS lMotors;
   uint32_t     lArmsStateCode;
 
+  LOGER::PrintfLog("%s running!",pTModule->mThreadName);
   //running state
   while(pTModule->mWorking)
   {

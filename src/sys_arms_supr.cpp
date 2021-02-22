@@ -20,6 +20,7 @@
 #include "sys_arms_leader.hpp"
 #include "sys_arms_loger.hpp"
 #include "sys_arms_tension_leader.hpp"
+#include "sys_arms_interactioner.hpp"
 
 
 namespace SUPR {
@@ -28,6 +29,8 @@ namespace SUPR {
 BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_ARMS_NUMS];
 BASE::ARMS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
 BASE::LOG_THREAD_INFO  mlogsModule;
+BASE::INTERACTION_THREAD_INFO mManInteraction;
+
 static BASE::STR_QUEUE *mLogQueue = NULL;
 
 
@@ -176,22 +179,37 @@ static void changeSuprThreadInfo(void) {
 
 static int32_t startModules(void) {
   //need handler error case
-  printf("startModule");
   int32_t qIdx = CONF::ARMS_M_SUPR_ID;
 
   // logs thread
   mlogsModule.mWorking = true;
   mlogsModule.mLogQueue = mLogQueue;
-  gHiMInfo[CONF::ARMS_T_MAX_ID+CONF::ARMS_M_MAX_ID].mPid         = BASE::hiCreateThread(
+  strcpy(mlogsModule.mThreadName, CONF::MN_LOG_NAME);
+  gHiMInfo[CONF::ARMS_LOG_1_ID].mPid         = BASE::hiCreateThread(
                                                                      CONF::MN_LOG_NAME,
                                                                      LOGER::threadEntry,
                                                                      CONF::PRI_LEAD,
                                                                      &mlogsModule);
-// arms threads
+  // interactioner thread
+  mManInteraction.mWorking = true;
+  mManInteraction.mLogQueue = mLogQueue;
+  strcpy(mManInteraction.mThreadName, CONF::MN_INTERACTION_NAME);
+  memcpy(mManInteraction.mIpV4Str, CONF::MN_INTERACTION_SERVER_IP, sizeof(CONF::MN_INTERACTION_SERVER_IP));
+  mManInteraction.mSerPort = CONF::MN_INTERACTION_SERVER_PORT;
+  mManInteraction.mState = BASE::M_STATE_INIT;
+  gHiMInfo[CONF::ARMS_INTERACTION_ID].mPid         =  BASE::hiCreateThread(
+                                                                     CONF::MN_INTERACTION_NAME,
+                                                                     INTERACTIONER::threadEntry,
+                                                                     CONF::PRI_LEAD,
+                                                                     &mManInteraction);
+
+
+  // arms threads
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < CONF::ARMS_M_MAX_ID; qIdx++)
   {
     mArmsModule[qIdx-1].mWorking = true;
     mArmsModule[qIdx-1].mLogQueue = mLogQueue;
+    strcpy(mArmsModule[qIdx-1].mThreadName, CONF::MN_NAME[qIdx]);
     memcpy(mArmsModule[qIdx-1].mIpV4Str, CONF::MN_SERVER_IP[qIdx-1], sizeof(CONF::MN_SERVER_IP[qIdx-1]));
     mArmsModule[qIdx-1].mSerPort = CONF::MN_SERVER_PORT[qIdx-1];
     mArmsModule[qIdx-1].mState = BASE::M_STATE_INIT;
@@ -203,16 +221,19 @@ static int32_t startModules(void) {
     gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_NAME[qIdx],
                                                  LEADER::threadEntry,
                                                  CONF::PRI_LEAD,
-                                                 &mArmsModule[qIdx-1]);
+                                                 &(mArmsModule[qIdx-1]));
+
     //printf("pid:%u\t", gHiMInfo[qIdx].mPid);
   }
 
 
+
 // tension threads
-  for (qIdx = CONF::ARMS_T_1_ID; qIdx < CONF::ARMS_T_MAX_ID; qIdx++)
+  for (qIdx = 0; qIdx < CONF::ARMS_T_MAX_ID-CONF::ARMS_T_1_ID; qIdx++)
   {
     mArmsTension[qIdx].mWorking  = true;
     mArmsTension[qIdx].mLogQueue = mLogQueue;
+    strcpy(mArmsTension[qIdx].mThreadName, CONF::MN_TENSION_NAME[qIdx]);
     memcpy(mArmsTension[qIdx].mIpV4Str, CONF::MN_TENSION_SERVER_IP[qIdx], sizeof(CONF::MN_TENSION_SERVER_IP[qIdx]));
     mArmsTension[qIdx].mSerPort = CONF::MN_TENSION_SERVER_PORT[qIdx];
   }
@@ -220,10 +241,10 @@ static int32_t startModules(void) {
 
   for (qIdx = CONF::ARMS_T_1_ID; qIdx < CONF::ARMS_T_MAX_ID; qIdx++)
   {
-    gHiMInfo[qIdx+CONF::ARMS_M_MAX_ID].mPid   = BASE::hiCreateThread(CONF::MN_TENSION_NAME[qIdx],
-                                                                     TENSIONLEADER::threadEntry,
-                                                                     CONF::PRI_LEAD,
-                                                                     &mArmsTension[qIdx]);
+    gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_TENSION_NAME[qIdx-CONF::ARMS_T_1_ID],
+                                                 TENSIONLEADER::threadEntry,
+                                                 CONF::PRI_LEAD,
+                                                 &mArmsTension[qIdx-CONF::ARMS_T_1_ID]);
     //printf("pid:%u\t", gHiMInfo[qIdx].mPid);
   }
 
@@ -249,8 +270,14 @@ static void checkSysError()
   if(iRet == DEF_SYS_ARMS_NUMS)
   {
     suprWorking = 0;
+
+    //stop tensions
     for (int qIdx = 0; qIdx < DEF_SYS_TENSIONLEADER_NUMS; qIdx++)
       mArmsTension[qIdx].mWorking = false;
+
+    //stop interaction
+    mManInteraction.mWorking = false;
+    return;
   }
 
 
@@ -289,7 +316,7 @@ static int32_t suprMainLoop(){
         continue;
      }
 
-    // if one arm error then set other stop
+    // if one arm error then set other stop, or man-interaction error set stop
     checkSysError();
 
     for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
@@ -359,21 +386,22 @@ int32_t dmsAppStartUp() {
     iRet = suprMainLoop();
   }
 
-  printf("quit dms partial modules for begin re-program ");
   int32_t qIdx = CONF::ARMS_M_SUPR_ID;
-  for (qIdx = CONF::ARMS_M_SUPR_ID+1; qIdx < CONF::ARMS_M_MAX_ID + DEF_SYS_TENSIONLEADER_NUMS; qIdx++) {
-    printf("live until re-program qIdx=%d\n", qIdx);
+  for (qIdx = CONF::ARMS_M_SUPR_ID+1; qIdx < CONF::ARMS_INTERACTION_MAX_ID; qIdx++) {
+    LOGER::PrintfLog("live until re-program qIdx=%d", qIdx);
     pthread_join(gHiMInfo[qIdx].mPid, NULL);
   }
 
+
   //notice loger to endup
+  LOGER::PrintfLog("quit loger modules");
   mlogsModule.mWorking = false;
   pthread_cond_signal(&mlogsModule.mPrintQueueReady);
   pthread_join(gHiMInfo[MODULES_NUMS-1].mPid, NULL);
 
   deInitSupr();
 
-  printf("quit sysArms all modules");
+  printf("quit sysArms all modules\n");
   return iRet;
 }
 

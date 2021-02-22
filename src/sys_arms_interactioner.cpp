@@ -5,23 +5,25 @@
 *
 *
 ******************************************************************************/
+
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdarg.h>
 
-#include "sys_arms_tension_leader.hpp"
+#include "sys_arms_loger.hpp"
 #include "sys_arms_defs.h"
 #include "sys_arms_conf.hpp"
-#include "sys_arms_loger.hpp"
+#include "sys_arms_interactioner.hpp"
 
 
-namespace TENSIONLEADER {
+namespace INTERACTIONER {
 
 
-static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
+static int initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
-static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
@@ -38,7 +40,9 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
 }
 
 
-static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
+
+///////////////////////////////////
+static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
 
@@ -48,7 +52,9 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   }
 
   //setFdNonblocking(pTModule->mSocket);
-  setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TENSION_TIMEOUT_S, CONF::SERVER_UDP_TENSION_TIMEOUT_US);
+  setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TIMEOUT_S, CONF::SERVER_UDP_TIMEOUT_US);
+
+  bzero(&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
 
   bzero(&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
   pTModule->mSerAddr.sin_family = AF_INET;
@@ -67,14 +73,14 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
 }
 
 
-static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
+static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
 {
   if(pTModule->mSocket >= 0)
   {
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  LOGER::PrintfLog("tension leader endup");
+  LOGER::PrintfLog("endup  ");
   return 0;
 }
 
@@ -83,7 +89,7 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
 ////////////////////////////////////////////////////////////////////////////////
 void* threadEntry(void* pModule)
 {
-  BASE::ARMS_THREAD_INFO *pTModule =(BASE::ARMS_THREAD_INFO *) pModule;
+  BASE::INTERACTION_THREAD_INFO *pTModule =(BASE::INTERACTION_THREAD_INFO *) pModule;
   if(NULL == pTModule)
   {
     return 0;
@@ -91,33 +97,21 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog("bind server ip failed, check network!");
+    LOGER::PrintfLog("bind server ip failed, check network again !\n");
+    //printf("bind server ip failed, check network again !\n");
     moduleEndUp(pTModule);
+    pTModule->mWorking = false;
     return 0;
   }
 
-  socklen_t mun = sizeof(pTModule->mPeerAddr);
-
-  //motors data
-  uint32_t     lArmsStateCode;
-
-  BASE::ARMS_TENSIONS_MSG mRecMsg;
+  BASE::PRINT_STR mLog;
   //running state
+  pTModule->mState = BASE::M_STATE_RUN;
+
   LOGER::PrintfLog("%s running!",pTModule->mThreadName);
   while(pTModule->mWorking)
   {
-    //rec UDP
-    int size = recvfrom(pTModule->mSocket , (char*)&(mRecMsg), sizeof(BASE::ARMS_TENSIONS_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-
-    //TUDO*****
-    if(size != sizeof(BASE::ARMS_TENSIONS_MSG))
-    {
-      LOGER::PrintfLog("tension thread rec overtime or error!");
-      continue;
-    }
-
-    //rec tension data
-
+    sleep(1);
   }
 
   moduleEndUp(pTModule);

@@ -199,6 +199,8 @@ typedef struct
 typedef struct
 {
   bool             mWorking;
+  char         mThreadName[15];
+
   M_STATE          mState;
   pthread_cond_t   mPrintQueueReady;
 
@@ -209,6 +211,8 @@ typedef struct
 typedef struct
 {
   bool         mWorking;
+  char         mThreadName[15];
+
   uint32_t     mSocket;
   sockaddr_in  mSerAddr, mPeerAddr;
   uint32_t     mSerPort;
@@ -222,7 +226,7 @@ typedef struct
 
   //log queue pri
   STR_QUEUE* mLogQueue;
-} ARMS_THREAD_INFO;
+} ARMS_THREAD_INFO, INTERACTION_THREAD_INFO;
 
 
 }  //namespace

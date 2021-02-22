@@ -26,20 +26,20 @@ typedef enum {
   ARMS_M_10_ID,
   ARMS_M_11_ID,
   ARMS_M_MAX_ID,
-} MODULE_NAME_ID;
 
-typedef enum {
-  ARMS_T_1_ID = 0,
+  ARMS_T_1_ID = 12,
   ARMS_T_2_ID,
   ARMS_T_MAX_ID,
-} MODULE_TENSION_NAME_ID;
 
-typedef enum {
-  ARMS_LOG_1_ID = 0,
+  ARMS_INTERACTION_ID = 14,
+  ARMS_INTERACTION_MAX_ID,
+
+  ARMS_LOG_1_ID = 15,
   ARMS_LOG_MAX_ID,
-} MODULE_LOGER_NAME_ID;
+} MODULE_NAME_ID;
 
-#define MODULES_NUMS (CONF::ARMS_M_MAX_ID + CONF::ARMS_T_MAX_ID + CONF::ARMS_LOG_MAX_ID)
+
+#define MODULES_NUMS (CONF::ARMS_LOG_MAX_ID)
 //MN=Module Name
 //
 /*
@@ -56,6 +56,8 @@ const char MN_NAME[][15] = {"MN_SUPR", "MN_SERVER1", "MN_SERVER2",
 const char MN_TENSION_NAME[][15] = {"MN_TENSION1", "MN_TENSION2"};
 
 const char MN_LOG_NAME[] = "MN_LOGS";
+
+const char MN_INTERACTION_NAME[] = "MN_INTERACTION";
 /*
 const char MN_SERVER_IP[][16] = {"127.0.0.0", "127.0.0.0", "127.0.0.0",
                                  "127.0.0.0", "127.0.0.0", "127.0.0.0",
@@ -77,6 +79,11 @@ const int  MN_SERVER_PORT[DEF_SYS_ARMS_NUMS + 1] = { 8001, 8002, 8003,
                                                      8010, 8011, 8012};
 
 const int  MN_TENSION_SERVER_PORT[DEF_SYS_TENSIONLEADER_NUMS + 1] = { 9001, 9002, 9003};
+
+
+const char MN_INTERACTION_SERVER_IP[] = "192.168.1.100";
+const int  MN_INTERACTION_SERVER_PORT = 10001;
+
 
 //m us
 const int SERVER_UDP_TIMEOUT_S = 0;

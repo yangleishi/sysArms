@@ -127,6 +127,7 @@ void* threadEntry(void* pModule)
   BASE::PRINT_STR mLog;
   //running state
   pTModule->mState = BASE::M_STATE_RUN;
+  LOGER::PrintfLog("%s running!",pTModule->mThreadName);
   while(pTModule->mWorking)
   {
     //TUDO*****
