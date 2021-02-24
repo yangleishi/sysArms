@@ -30,12 +30,13 @@ namespace BASE {
 typedef enum
 {
   M_STATE_INIT = 0,
+  M_STATE_CONF,
   M_STATE_RUN,
   M_STATE_STOP,
 } M_STATE;
 
 
-////////////////////////////////////  UDP communication protocol   /////////////////////////////////////
+////////////////////////////////////11 arms  UDP communication protocol   /////////////////////////////////////
 
 ///for udp msg ctrl part/////////////
 //Define the ctrl
@@ -57,6 +58,31 @@ const uint16_t   ST_SYS_KNOCK             = 0xFFFF;
 const uint16_t   ST_SYS_PRKNOCK           = 0xFFFE;
 
 const uint16_t   ST_SYS_REC_ERROR         = 0xFFF0;
+
+///end of udp msg state part
+
+////////////////////////////////////man interaction  UDP communication protocol   /////////////////////////////////////
+
+///for udp msg ctrl part/////////////
+//Define the ctrl
+const uint8_t   CT_MAN_MACHINE_POWERON = 0x00;
+const uint8_t   CT_MAN_MACHINE_FIRE    = 0x01;
+const uint8_t   CT_MAN_MACHINE_UNFIRE  = 0x02;
+const uint8_t   CT_MAN_MACHINE_RESET   = 0x03;
+///end of udp msg ctrl part
+
+
+///for udp msg state part/////////////
+//Define the state
+const uint16_t   ST_MAN_MACHINE_POWERON_OK        = 0x0000;
+const uint16_t   ST_MAN_MACHINE_POWERON_FAILED    = 0x0001;
+const uint16_t   ST_MAN_MACHINE_FIRE_OK           = 0x0002;
+const uint16_t   ST_MAN_MACHINE_STOP_OK           = 0x0003;
+
+const uint16_t   ST_MAN_MACHINE_KNOCK             = 0xFFFF;
+const uint16_t   ST_MAN_MACHINE_PRKNOCK           = 0xFFFE;
+
+const uint16_t   ST_MAN_MACHINE_REC_ERROR         = 0xFFF0;
 
 ///end of udp msg state part
 
@@ -185,6 +211,34 @@ typedef struct
   //mCrcCode++
   uint16_t mCrcCode;
 } ARMS_TENSIONS_MSG;
+
+
+///////////////////////////////////
+// interaction data structure
+#define INTERACTION_DATA_LENGTH 1024
+typedef struct
+{
+  //frame start 0x88
+  uint8_t   mIdentifier;
+
+  // control cmd
+  uint8_t   mCtrl;
+
+  // system state
+  uint16_t  mSysState;
+
+  // frame time
+  SYS_TIME  mSysTime;
+
+  // data length,now fixed length
+  uint16_t  mDataLength;
+
+  //fixed length data
+  char mDatas[INTERACTION_DATA_LENGTH];
+
+  //mCrcCode++
+  uint16_t mCrcCode;
+} ARMS_INTERACTION_MSG;
 
 /////////////////////////////////TODU//////////////////////////////////////////////
 //TODU

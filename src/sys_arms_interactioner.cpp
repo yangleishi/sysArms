@@ -18,6 +18,21 @@
 #include "sys_arms_conf.hpp"
 #include "sys_arms_interactioner.hpp"
 
+//sys config parame
+struct configItem
+{
+  //4 ecoder
+  float Encoder_X_Calibration;
+  float Encoder_Y_Calibration;
+  float Encoder_Z_Calibration;
+  float Encoder_W_Calibration;
+
+  float Angle_Sensor_Calibration;
+
+  float Tension_Max_Value;
+};
+
+configItem mParames[11];
 
 namespace INTERACTIONER {
 
@@ -25,6 +40,10 @@ namespace INTERACTIONER {
 static int initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 
+//config file
+static int strkv(char *src, char *key, char *value);
+
+static void readConfig(char * pFile, struct configItem* configVar, int configNum);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -39,9 +58,6 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   }
 }
 
-
-
-///////////////////////////////////
 static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
@@ -52,7 +68,7 @@ static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule)
   }
 
   //setFdNonblocking(pTModule->mSocket);
-  setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TIMEOUT_S, CONF::SERVER_UDP_TIMEOUT_US);
+  setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_INTERACTION_TIMEOUT_S, CONF::SERVER_UDP_INTERACTION_TIMEOUT_US);
 
   bzero(&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
 
@@ -64,10 +80,7 @@ static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule)
   iRet = bind(pTModule->mSocket, (struct sockaddr*)&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
 
   if(iRet < 0)
-  {
-    LOGER::PrintfLog("server :%d bind faild", pthread_self());
     return iRet;
-  }
 
   return 0;
 }
@@ -84,6 +97,24 @@ static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
   return 0;
 }
 
+
+static int strkv(char *src, char *key, char *value)
+{
+    char *p, *q;
+    int len;
+    p = strchr(src, '=');//p找到等号
+    q = strchr(src, '\n');//q找到换行
+
+    //如果有等号有换行
+    if (p != NULL && q != NULL)
+    {
+        *q = '\0'; //将换行设置为字符串结尾
+        strncpy(key, src, p-src); //将等号前的内容拷入key中
+        strcpy(value, p+1); //将等号后的内容拷入value中，跳过等号所以p需要加1
+        return 1;
+    }
+    return 0;
+}
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -97,12 +128,13 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog("bind server ip failed, check network again !\n");
-    //printf("bind server ip failed, check network again !\n");
+    LOGER::PrintfLog("%s  bind server ip failed, check network again !", pTModule->mThreadName);
     moduleEndUp(pTModule);
     pTModule->mWorking = false;
     return 0;
   }
+
+  socklen_t mun = sizeof(pTModule->mPeerAddr);
 
   BASE::PRINT_STR mLog;
   //running state
@@ -111,7 +143,33 @@ void* threadEntry(void* pModule)
   LOGER::PrintfLog("%s running!",pTModule->mThreadName);
   while(pTModule->mWorking)
   {
-    sleep(1);
+    //rec UDP************TODU
+    int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
+    //TUDO*****
+    //lArmsStateCode = (size != sizeof(BASE::ARMS_R_MSG)) ? BASE::ST_SYS_REC_ERROR : pTModule->mRecMsg.mSysState;
+
+    //TODU
+    switch (pTModule->mState)
+    {
+      case BASE::M_STATE_INIT:
+      {
+        LOGER::PrintfLog("test log hear");
+        break;
+      }
+      case BASE::M_STATE_RUN:
+      {
+        break;
+      }
+      case BASE::M_STATE_STOP:
+      {
+        break;
+      }
+      default:
+      {
+        break;
+      }
+    }
+
   }
 
   moduleEndUp(pTModule);

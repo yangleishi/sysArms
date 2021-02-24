@@ -84,14 +84,18 @@ const int  MN_TENSION_SERVER_PORT[DEF_SYS_TENSIONLEADER_NUMS + 1] = { 9001, 9002
 const char MN_INTERACTION_SERVER_IP[] = "192.168.1.100";
 const int  MN_INTERACTION_SERVER_PORT = 10001;
 
-
-//m us
+//*********////////// UDP timeout///////////////////
+//m us,arms ctrl
 const int SERVER_UDP_TIMEOUT_S = 0;
 const int SERVER_UDP_TIMEOUT_US = 5000;
 
-//m us
+//m us rec tensions
 const int SERVER_UDP_TENSION_TIMEOUT_S = 0;
 const int SERVER_UDP_TENSION_TIMEOUT_US = 900000;
+
+//m us rec interaction
+const int SERVER_UDP_INTERACTION_TIMEOUT_S = 1;
+const int SERVER_UDP_INTERACTION_TIMEOUT_US = 0;
 
 //Define priority for modules
 const int PRI_SUPR = 50;

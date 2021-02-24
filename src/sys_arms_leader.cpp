@@ -79,10 +79,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   iRet = bind(pTModule->mSocket, (struct sockaddr*)&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
 
   if(iRet < 0)
-  {
-    LOGER::PrintfLog("server :%d bind faild", pthread_self());
     return iRet;
-  }
 
   return 0;
 }
@@ -153,8 +150,7 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog("bind server ip failed, check network again !\n");
-    //printf("bind server ip failed, check network again !\n");
+    LOGER::PrintfLog("%s  bind server ip failed, check network again !", pTModule->mThreadName);
     moduleEndUp(pTModule);
     pTModule->mWorking = false;
     return 0;
@@ -206,8 +202,9 @@ void* threadEntry(void* pModule)
         {
           //TUDO send 0 let arms wait
           memset((char*)&lMotors, 0, sizeof(lMotors));
+          //relative position (0,0,0)
           motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
-          pTModule->mState = BASE::M_STATE_RUN;
+          pTModule->mState = BASE::M_STATE_CONF;
           break;
         }
         //power on
@@ -215,12 +212,30 @@ void* threadEntry(void* pModule)
         LOGER::PrintfLog("test log hear");
         break;
       }
+      case BASE::M_STATE_CONF:
+      {
+        //TUDO
+        if(lArmsStateCode == BASE::ST_SYS_FIRE_OK)
+        {
+          //TUDO cal******,save all data to interactioner
+
+          //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
+          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
+        }
+        else
+        {
+          LOGER::PrintfLog("error code:%d\n", lArmsStateCode);
+          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_UNFIRE, mCrc);
+          pTModule->mState = BASE::M_STATE_STOP;
+        }
+        break;
+      }
       case BASE::M_STATE_RUN:
       {
         //TUDO
         if(lArmsStateCode == BASE::ST_SYS_FIRE_OK)
         {
-          //TUDO cal******
+          //TUDO PID ctrl move to (x y z)
 
           motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
         }

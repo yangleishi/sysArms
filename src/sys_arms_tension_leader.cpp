@@ -58,10 +58,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   iRet = bind(pTModule->mSocket, (struct sockaddr*)&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
 
   if(iRet < 0)
-  {
-    LOGER::PrintfLog("server :%d bind faild", pthread_self());
     return iRet;
-  }
 
   return 0;
 }
@@ -91,7 +88,7 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog("bind server ip failed, check network!");
+    LOGER::PrintfLog("%s  bind server ip failed, check network again !", pTModule->mThreadName);
     moduleEndUp(pTModule);
     return 0;
   }
