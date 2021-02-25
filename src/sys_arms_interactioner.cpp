@@ -32,7 +32,7 @@ struct configItem
   float Tension_Max_Value;
 };
 
-configItem mParames[11];
+static configItem mParames[DEF_SYS_ARMS_NUMS] = {0};
 
 namespace INTERACTIONER {
 
@@ -41,9 +41,8 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 
 //config file
-static int strkv(char *src, char *key, char *value);
-
-static void readConfig(char * pFile, struct configItem* configVar, int configNum);
+static int readConfig(configItem  * mParame, const int mPNum);
+static int writeConfig(configItem * mParame, const int mPNum);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -98,22 +97,79 @@ static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
 }
 
 
-static int strkv(char *src, char *key, char *value)
+static int readConfig(configItem * mParame, const int mPNum)
 {
-    char *p, *q;
-    int len;
-    p = strchr(src, '=');//p找到等号
-    q = strchr(src, '\n');//q找到换行
+  int iRet = 0;
+  configItem * mTParame = mParame;
+  FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "r");
 
-    //如果有等号有换行
-    if (p != NULL && q != NULL)
+  if(pFile == NULL)
+  {
+    if((pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "w")) == NULL)
     {
-        *q = '\0'; //将换行设置为字符串结尾
-        strncpy(key, src, p-src); //将等号前的内容拷入key中
-        strcpy(value, p+1); //将等号后的内容拷入value中，跳过等号所以p需要加1
-        return 1;
+        printf("--------------\n");
+        return  -1;
     }
+
+    for (int i=0; i<mPNum; i++)
+    {
+      memset((char*)mTParame, 0, sizeof(configItem));
+      fprintf(pFile, "%f %f %f %f %f %f\n",
+                      mTParame->Encoder_X_Calibration,
+                      mTParame->Encoder_Y_Calibration,
+                      mTParame->Encoder_Z_Calibration,
+                      mTParame->Encoder_W_Calibration,
+                      mTParame->Angle_Sensor_Calibration,
+                      mTParame->Tension_Max_Value);
+      mTParame++;
+    }
+
+    fclose(pFile);
     return 0;
+  }
+
+  for (int i=0; i<mPNum; i++)
+  {
+
+    fscanf(pFile, "%f %f %f %f %f %f\n",
+                    &(mTParame->Encoder_X_Calibration),
+                    &(mTParame->Encoder_Y_Calibration),
+                    &(mTParame->Encoder_Z_Calibration),
+                    &(mTParame->Encoder_W_Calibration),
+                    &(mTParame->Angle_Sensor_Calibration),
+                    &(mTParame->Tension_Max_Value));
+
+    mTParame++;
+  }
+
+  fclose(pFile);
+  return iRet;
+}
+
+static int writeConfig(configItem * mParame, const int mPNum)
+{
+  int iRet = 0;
+  FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "w");
+
+  if(pFile == NULL)
+    return -1;
+
+  configItem * mTParame = mParame;
+  for (int i=0; i<mPNum; i++)
+  {
+    fprintf(pFile, "%f %f %f %f %f %f\n",
+                   mTParame->Encoder_X_Calibration,
+                   mTParame->Encoder_Y_Calibration,
+                   mTParame->Encoder_Z_Calibration,
+                   mTParame->Encoder_W_Calibration,
+                   mTParame->Angle_Sensor_Calibration,
+                   mTParame->Tension_Max_Value);
+
+    mTParame++;
+  }
+
+  fclose(pFile);
+  return iRet;
 }
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
@@ -125,6 +181,8 @@ void* threadEntry(void* pModule)
   {
     return 0;
   }
+
+  readConfig(mParames, DEF_SYS_ARMS_NUMS);
 
   if(initServer(pTModule) != 0)
   {

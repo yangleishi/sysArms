@@ -84,6 +84,8 @@ const int  MN_TENSION_SERVER_PORT[DEF_SYS_TENSIONLEADER_NUMS + 1] = { 9001, 9002
 const char MN_INTERACTION_SERVER_IP[] = "192.168.1.100";
 const int  MN_INTERACTION_SERVER_PORT = 10001;
 
+
+const char MN_INTERACTION_CONF_FILE[] = "armsConf.conf";
 //*********////////// UDP timeout///////////////////
 //m us,arms ctrl
 const int SERVER_UDP_TIMEOUT_S = 0;
