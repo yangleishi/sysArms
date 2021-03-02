@@ -204,8 +204,19 @@ void* threadEntry(void* pModule)
           memset((char*)&lMotors, 0, sizeof(lMotors));
           //relative position (0,0,0)
           motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
-          pTModule->mState = BASE::M_STATE_CONF;
+          pTModule->mAckState = BASE::ACK_STATE_INIT_OK;
           break;
+        }
+        else if (lArmsStateCode == BASE::ST_SYS_FIRE_OK)
+        {
+          memset((char*)&lMotors, 0, sizeof(lMotors));
+          //relative position (0,0,0)
+          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
+          break;
+        }
+        else
+        {
+
         }
         //power on
         int iRet =  motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_POWERON, mCrc);

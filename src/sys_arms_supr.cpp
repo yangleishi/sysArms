@@ -56,6 +56,7 @@ static int32_t suprMainLoop();
 static void signalHandle(int mSignal);
 static BASE::STR_QUEUE * qCreate(void);
 static void checkSysError();
+static void changeState();
 
 static int32_t deInitSupr(void);
 ////////////////////////////////////////////////////////////////////////////////
@@ -290,6 +291,73 @@ static void checkSysError()
 
 }
 
+static void changeState()
+{
+  switch (mSysState)
+  {
+    case BASE::M_STATE_INIT:
+    {
+      int iRet = 0;
+      //check is conf
+      for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+        if(mArmsModule[qIdx].mAckState == BASE::ACK_STATE_INIT_OK)
+          iRet++;
+      //change all modules CONF state
+      if(iRet == DEF_SYS_ARMS_NUMS)
+      {
+        for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+          mArmsModule[qIdx].mState = BASE::M_STATE_CONF;
+        mSysState = BASE::M_STATE_CONF;
+      }
+      break;
+    }
+    case BASE::M_STATE_CONF:
+    {
+      //check is change to run or stop
+      if(mManInteraction.mIsStataChange && (mManInteraction.mNewState == BASE::M_STATE_RUN || mManInteraction.mNewState == BASE::M_STATE_STOP))
+      {
+        for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+          mArmsModule[qIdx].mState = mManInteraction.mNewState;
+
+        mSysState = mManInteraction.mNewState;
+        mManInteraction.mIsStataChange = false;
+      }
+      break;
+    }
+    case BASE::M_STATE_RUN:
+    {
+      //check is change to stop
+      if(mManInteraction.mIsStataChange && mManInteraction.mNewState == BASE::M_STATE_STOP)
+      {
+        for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+          mArmsModule[qIdx].mState = mManInteraction.mNewState;
+
+        mSysState = mManInteraction.mNewState;
+        mManInteraction.mIsStataChange = false;
+      }
+      break;
+    }
+    case BASE::M_STATE_STOP:
+    {
+      //check is change to conf or run
+      if(mManInteraction.mIsStataChange && (mManInteraction.mNewState == BASE::M_STATE_CONF || mManInteraction.mNewState == BASE::M_STATE_RUN))
+      {
+        for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+          mArmsModule[qIdx].mState = mManInteraction.mNewState;
+
+        mSysState = mManInteraction.mNewState;
+        mManInteraction.mIsStataChange = false;
+      }
+      break;
+    }
+    default:
+    {
+      break;
+    }
+  }
+
+}
+
 static int32_t suprMainLoop(){
   //TODU
   struct timespec now, next, interval;
@@ -318,6 +386,8 @@ static int32_t suprMainLoop(){
 
     // if one arm error then set other stop, or man-interaction error set stop
     checkSysError();
+
+    changeState();
 
     for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
     {

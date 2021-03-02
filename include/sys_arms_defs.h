@@ -35,6 +35,11 @@ typedef enum
   M_STATE_STOP,
 } M_STATE;
 
+//DEFINE THREAD ack state
+typedef enum
+{
+  ACK_STATE_INIT_OK = 100,
+} ACK_STATE;
 
 ////////////////////////////////////11 arms  UDP communication protocol   /////////////////////////////////////
 
@@ -271,7 +276,8 @@ typedef struct
   sockaddr_in  mSerAddr, mPeerAddr;
   uint32_t     mSerPort;
   char         mIpV4Str[STR_IPV4_LENGTH];
-  M_STATE         mState;
+  M_STATE      mState;
+  ACK_STATE    mAckState;
   pthread_mutex_t mArmsMsgMutex;
   pthread_cond_t  mArmsMsgReady;
 
@@ -280,8 +286,13 @@ typedef struct
 
   //log queue pri
   STR_QUEUE* mLogQueue;
-} ARMS_THREAD_INFO, INTERACTION_THREAD_INFO;
+} ARMS_THREAD_INFO;
 
+struct INTERACTION_THREAD_INFO : public ARMS_THREAD_INFO
+{
+  bool      mIsStataChange;
+  M_STATE   mNewState;
+};
 
 }  //namespace
 
