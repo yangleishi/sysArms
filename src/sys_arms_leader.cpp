@@ -24,7 +24,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
 
 ///msg functions/////////////////
-static int packageFrame(BASE::ARMS_S_MSG* pMsg, uint8_t mCtrl, BASE::MOTORS &mMotors, uint16_t mCrcCode);
+static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t mCrcCode);
 
 //pTmodule cmd or data send to client
 static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint16_t mCrcCode);
@@ -97,7 +97,7 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
 
 
 ///msg functions/////////////////
-static int packageFrame(BASE::ARMS_S_MSG* pMsg, uint8_t mCtrl, BASE::MOTORS &mMotors, uint16_t mCrcCode)
+static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t mCrcCode)
 {
   int32_t iRet = 0;
   if(pMsg == NULL)
@@ -107,16 +107,15 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg, uint8_t mCtrl, BASE::MOTORS &mMo
 
   struct timespec now;
 
-  pMsg->mIdentifier = 0x88;
-  pMsg->mCtrl  = mCtrl;
+  pMsg->mFrameStart = 0x1ACF;
+  pMsg->mIdentifier = 0xFF;
+  pMsg->mApid = 0x02;
+
   memcpy((char*)&(pMsg->mMotors), (char*)&mMotors, sizeof(mMotors));
-  pMsg->mSysState = 0;
 
   clock_gettime(CLOCK_MONOTONIC, &now);
   pMsg->mSysTime.mSysTimeS  = now.tv_sec;
   pMsg->mSysTime.mSysTimeUs = now.tv_nsec/1000;
-
-  pMsg->mDataLength = sizeof(BASE::MOTORS);
 
   pMsg->mCrcCode = mCrcCode;
 
@@ -126,7 +125,7 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg, uint8_t mCtrl, BASE::MOTORS &mMo
 static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint16_t mCrcCode)
 {
   int32_t iRet = 0;
-  packageFrame(&pTModule->mSendMsg, mCtrl, mMotors, mCrcCode);
+  packageFrame(&pTModule->mSendMsg,  mMotors, mCrcCode);
   iRet = sendto(pTModule->mSocket, &pTModule->mSendMsg, sizeof(BASE::ARMS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
   return  iRet;
 }
@@ -191,7 +190,7 @@ void* threadEntry(void* pModule)
     //rec UDP
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
     //TUDO*****
-    lArmsStateCode = (size != sizeof(BASE::ARMS_R_MSG)) ? BASE::ST_SYS_REC_ERROR : pTModule->mRecMsg.mSysState;
+    lArmsStateCode = (size != sizeof(BASE::ARMS_R_MSG)) ? BASE::ST_SYS_REC_ERROR : pTModule->mRecMsg.mStateCode;
 
     //send
     switch (pTModule->mState)

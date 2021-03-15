@@ -105,23 +105,23 @@ typedef struct
 } STR_QUEUE;
 
 ///////////////////////////////////
-//Motor control data
+//Motor control datas
 typedef struct
 {
-  float   mPosition;
-  float   mSpeed;
-  //TODU
-} MOTOR_DATA;
+  //ctrl motors data 0 1 2 3 4 5
+  uint8_t    mCmd;
+  float      mPosition;
+  float      mSpeed;
+} MOTOR_CTRL;
+
 
 //Motor control datas
 typedef struct
 {
   //four motors data
-  MOTOR_DATA mServo1;
-  MOTOR_DATA mServo2;
-  MOTOR_DATA mStepping1;
-  MOTOR_DATA mStepping2;
+  MOTOR_CTRL mMotorsCmd[4];
 } MOTORS;
+
 
 ///////////////////////////////////
 //Time
@@ -133,63 +133,103 @@ typedef struct
 
 
 ///////////////////////////////////
-// UDP, send control data structure
+
 typedef struct
 {
-  //frame start 0x88
+  //frame start 0x1ACF
+  uint16_t   mFrameStart;
+
+  //frame unique dev 0xFF
   uint8_t   mIdentifier;
 
-  // control cmd
-  uint8_t   mCtrl;
+  //APID 0x02
+  uint8_t    mApid;
 
-  // system state
-  uint16_t  mSysState;
+  //dev type 0x01
+  uint8_t    mType;
 
   // frame time
   SYS_TIME  mSysTime;
 
-  // data length,now fixed length
-  uint16_t  mDataLength;
+} ARMS_S_MSG_HEARDER;
 
-  //motors data
-  MOTORS mMotors;
+// UDP, send control data structure. 11 arms
+typedef struct: public ARMS_S_MSG_HEARDER
+{
+  //ctrl motors data
+  MOTORS    mMotors;
 
   //mCrcCode++
   uint16_t mCrcCode;
 } ARMS_S_MSG;
 
+// UDP, send control data structure tensions
+typedef struct: public ARMS_S_MSG_HEARDER
+{
+  //ctrl tensions start/stop data. 0 1
+  uint8_t    mCmd;
+
+  //mCrcCode++
+  uint16_t mCrcCode;
+} ARMS_S_TENSIONS_MSG;
 
 ///////////////////////////////////
-// UDP, rec control data structure
+//Motor rec datas
 typedef struct
 {
-  float    mEncoder;
-  float    mSiko[2];
-  float    mInclinometerXY[2];
-  uint16_t mSwitch;
-} SENSOR;
+  //rec motors datas
+  uint8_t    mMotorStateCode;
+  float      mPosition;
+  float      mSpeed;
+  float      mAcceleration;
+} MOTOR_REC_DATAS;
 
+// UDP, rec data structure. 11 arms
 typedef struct
 {
-  //frame start 0x88
+  //frame start 0x1ACF
+  uint16_t   mFrameStart;
+
+  //frame unique dev 0xFF
   uint8_t   mIdentifier;
 
-  // control cmd
-  uint8_t   mCtrl;
+  //APID 0x01
+  uint8_t    mApid;
 
-  // system state
-  uint16_t  mSysState;
+  //dev type 0x01
+  uint8_t    mType;
+
+  //states
+  uint16_t   mStateCode;
 
   // frame time
   SYS_TIME  mSysTime;
 
-  // data length,now fixed length
-  uint16_t  mDataLength;
+//****************************  rec Datas  ***********************************//
+  // Switch datas
+  uint16_t  mSwitchStateCode;
+  uint16_t  mSwitchTiggers;
 
-  //motors data
-  MOTORS mMotors;
+  //inclinometers  datas 0-7,7-15
+  uint16_t  mInclinometersStateCode;
+  float     mInclinometer1_x;
+  float     mInclinometer1_y;
+  float     mInclinometer2_x;
+  float     mInclinometer2_y;
 
-  SENSOR mSensors;
+  //inclinometers  datas 0-7,7-15
+  uint16_t  mSikosStateCode;
+  float     mSiko1;
+  float     mSiko2;
+
+  //encoder  data
+  uint8_t   mEncoderStateCode;
+  uint64_t  mEncoders;
+
+
+  //motors datas
+  MOTOR_REC_DATAS mMotors[4];
+
   //mCrcCode++
   uint16_t mCrcCode;
 } ARMS_R_MSG;
@@ -197,24 +237,30 @@ typedef struct
 //tensions. 6 float data
 typedef struct
 {
-  //frame start 0x88
+  //frame start 0x1ACF
+  uint16_t  mFrameStart;
+
+  //frame unique dev 0xFF
   uint8_t   mIdentifier;
 
-  // control cmd
-  uint8_t   mCtrl;
+  //APID 0x03
+  uint8_t   mApid;
 
-  // system state
-  uint16_t  mSysState;
+  //dev type 0x01
+  uint8_t   mType;
+
+  //states
+  uint8_t   mStateCode;
 
   // frame time
   SYS_TIME  mSysTime;
 
-  // data length,now fixed length
-  uint16_t  mDataLength;
-
-  float    mTensions[6];
+  //****************************  rec tensions  ***********************************//
+  // tensions datas
+  uint8_t   mTensionsStateCode;
+  float     mTensions;
   //mCrcCode++
-  uint16_t mCrcCode;
+  uint16_t  mCrcCode;
 } ARMS_TENSIONS_MSG;
 
 
