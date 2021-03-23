@@ -44,23 +44,25 @@ typedef enum
 ////////////////////////////////////11 arms  UDP communication protocol   /////////////////////////////////////
 
 ///for udp msg ctrl part/////////////
-//Define the ctrl
-const uint8_t   CT_SYS_POWERON = 0x00;
-const uint8_t   CT_SYS_FIRE    = 0x01;
-const uint8_t   CT_SYS_UNFIRE  = 0x02;
-const uint8_t   CT_SYS_RESET   = 0x03;
+
+//Define the motor ctrl
+const uint8_t   CT_MOTOR_POWERDOWN = 0x00;
+const uint8_t   CT_MOTOR_POWERON    = 0x01;
+const uint8_t   CT_MOTOR_STOP  = 0x02;
+const uint8_t   CT_MOTOR_ZERO   = 0x03;
+const uint8_t   CT_MOTOR_POSITION   = 0x04;
+const uint8_t   CT_MOTOR_SPEED   = 0x05;
+
+//Define the motor rec state
+const uint8_t   ST_MOTOR_START   = 0x00;
+const uint8_t   ST_MOTOR_STOP    = 0x01;
+
 ///end of udp msg ctrl part
 
 
 ///for udp msg state part/////////////
-//Define the state
-const uint16_t   ST_SYS_POWERON_OK        = 0x0000;
-const uint16_t   ST_SYS_POWERON_FAILED    = 0x0001;
-const uint16_t   ST_SYS_FIRE_OK           = 0x0002;
-const uint16_t   ST_SYS_STOP_OK           = 0x0003;
-
-const uint16_t   ST_SYS_KNOCK             = 0xFFFF;
-const uint16_t   ST_SYS_PRKNOCK           = 0xFFFE;
+//Define the rec code state
+const uint16_t   ST_SYS_STATE_OK        = 0x0000;
 
 const uint16_t   ST_SYS_REC_ERROR         = 0xFFF0;
 

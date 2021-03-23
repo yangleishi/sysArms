@@ -26,6 +26,8 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
 ///msg functions/////////////////
 static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t mCrcCode);
 
+static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg);
+
 //pTmodule cmd or data send to client
 static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint16_t mCrcCode);
 ////////////////////////////////////////////////////////////////////////////////
@@ -125,9 +127,34 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t
 static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint16_t mCrcCode)
 {
   int32_t iRet = 0;
+
+  //ctrl cmd motor
+  for(int i=0; i<4; i++)
+  {
+    mMotors.mMotorsCmd[i].mCmd = mCtrl;
+  }
   packageFrame(&pTModule->mSendMsg,  mMotors, mCrcCode);
   iRet = sendto(pTModule->mSocket, &pTModule->mSendMsg, sizeof(BASE::ARMS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
   return  iRet;
+}
+
+
+static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg)
+{
+  uint16_t iRet = 0;
+
+  uint16_t motorBit = 1;
+  //check all start
+  for(int i=0; i<4; i++)
+  {
+    if((mRecMsg.mMotors[i].mMotorStateCode % 2) == BASE::ST_MOTOR_STOP)
+    {
+      iRet |= motorBit;
+    }
+    motorBit << 1;
+  }
+
+  return iRet;
 }
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
@@ -155,19 +182,11 @@ void* threadEntry(void* pModule)
     return 0;
   }
 
-  struct timespec  pfTime1, pfTime2;
-  int64_t diff;
+  //struct timespec  pfTime1;
 
   socklen_t mun = sizeof(pTModule->mPeerAddr);
 
-  //BASE::ARMS_S_MSG mRec, mSendMsg;
-  //BASE::MOTORS   mMotors;
-
-  int lossF = 0;
-  uint16_t  cRc = 0;
-  clock_gettime(CLOCK_MONOTONIC, &pfTime1);
-
-  static int64_t maxDiff = 0;
+  //clock_gettime(CLOCK_MONOTONIC, &pfTime1);
 
   //uint32_t mArmsState = -1;
   uint16_t mCrc = 0;
@@ -197,45 +216,41 @@ void* threadEntry(void* pModule)
     {
       case BASE::M_STATE_INIT:
       {
-        if(lArmsStateCode == BASE::ST_SYS_POWERON_OK)
+        if(lArmsStateCode == BASE::ST_SYS_STATE_OK)
         {
-          //TUDO send 0 let arms wait
-          memset((char*)&lMotors, 0, sizeof(lMotors));
-          //relative position (0,0,0)
-          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
-          pTModule->mAckState = BASE::ACK_STATE_INIT_OK;
-          break;
+          //check motor is power on
+          if(checkMotorsState(pTModule->mRecMsg) == 0) // motor 0000  all start
+          {
+            //TUDO send 0 let arms wait
+            memset((char*)&lMotors, 0, sizeof(lMotors));
+            //zero
+            motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_ZERO, mCrc);
+            pTModule->mAckState = BASE::ACK_STATE_INIT_OK;
+          }
+          else if(checkMotorsState(pTModule->mRecMsg) == 0xF) // motor 1111  all stop
+          {
+            //motor power on
+            int iRet =  motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_POWERON, mCrc);
+            LOGER::PrintfLog("test log hear");
+          }
         }
-        else if (lArmsStateCode == BASE::ST_SYS_FIRE_OK)
-        {
-          memset((char*)&lMotors, 0, sizeof(lMotors));
-          //relative position (0,0,0)
-          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
-          break;
-        }
-        else
-        {
 
-        }
-        //power on
-        int iRet =  motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_POWERON, mCrc);
-        LOGER::PrintfLog("test log hear");
         break;
       }
       case BASE::M_STATE_CONF:
       {
         //TUDO
-        if(lArmsStateCode == BASE::ST_SYS_FIRE_OK)
+        if(lArmsStateCode == BASE::ST_SYS_STATE_OK)
         {
           //TUDO cal******,save all data to interactioner
 
           //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
-          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
+          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_SPEED, mCrc);
         }
         else
         {
           LOGER::PrintfLog("error code:%d\n", lArmsStateCode);
-          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_UNFIRE, mCrc);
+          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_STOP, mCrc);
           pTModule->mState = BASE::M_STATE_STOP;
         }
         break;
@@ -243,30 +258,24 @@ void* threadEntry(void* pModule)
       case BASE::M_STATE_RUN:
       {
         //TUDO
-        if(lArmsStateCode == BASE::ST_SYS_FIRE_OK)
+        if(lArmsStateCode == BASE::ST_SYS_STATE_OK)
         {
           //TUDO PID ctrl move to (x y z)
 
-          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_FIRE, mCrc);
+          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_SPEED, mCrc);
         }
         else
         {
           LOGER::PrintfLog("error code:%d\n", lArmsStateCode);
-          motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_UNFIRE, mCrc);
+          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_STOP, mCrc);
           pTModule->mState = BASE::M_STATE_STOP;
         }
         break;
       }
       case BASE::M_STATE_STOP:
       {
-        motorMoveCmd(pTModule, lMotors, BASE::CT_SYS_UNFIRE, mCrc);
-
-        //stop ok and recMsg error,then endup.
-        if(lArmsStateCode == BASE::ST_SYS_STOP_OK || lArmsStateCode == BASE::ST_SYS_REC_ERROR)
-        {
-          pTModule->mWorking = false;
-          break;
-        }
+        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_POWERDOWN, mCrc);
+        pTModule->mWorking = false;
         break;
       }
       default:
