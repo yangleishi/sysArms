@@ -214,6 +214,7 @@ static int32_t startModules(void) {
     memcpy(mArmsModule[qIdx-1].mIpV4Str, CONF::MN_SERVER_IP[qIdx-1], sizeof(CONF::MN_SERVER_IP[qIdx-1]));
     mArmsModule[qIdx-1].mSerPort = CONF::MN_SERVER_PORT[qIdx-1];
     mArmsModule[qIdx-1].mState = BASE::M_STATE_INIT;
+    mArmsModule[qIdx-1].mAckState = BASE::ACK_STATE_NULL;
   }
 
 

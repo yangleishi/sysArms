@@ -38,7 +38,8 @@ typedef enum
 //DEFINE THREAD ack state
 typedef enum
 {
-  ACK_STATE_INIT_OK = 100,
+  ACK_STATE_NULL = 100,
+  ACK_STATE_INIT_OK,
 } ACK_STATE;
 
 ////////////////////////////////////11 arms  UDP communication protocol   /////////////////////////////////////
@@ -50,8 +51,7 @@ const uint8_t   CT_MOTOR_POWERDOWN = 0x00;
 const uint8_t   CT_MOTOR_POWERON    = 0x01;
 const uint8_t   CT_MOTOR_STOP  = 0x02;
 const uint8_t   CT_MOTOR_ZERO   = 0x03;
-const uint8_t   CT_MOTOR_POSITION   = 0x04;
-const uint8_t   CT_MOTOR_SPEED   = 0x05;
+const uint8_t   CT_MOTOR_RUN   = 0x04;
 
 //Define the motor rec state
 const uint8_t   ST_MOTOR_START   = 0x00;
@@ -110,8 +110,8 @@ typedef struct
 //Motor control datas
 typedef struct
 {
-  //ctrl motors data 0 1 2 3 4 5
-  uint8_t    mCmd;
+  //ctrl motors data
+  uint16_t   mCmd;
   float      mPosition;
   float      mSpeed;
 } MOTOR_CTRL;
@@ -329,8 +329,12 @@ typedef struct
   pthread_mutex_t mArmsMsgMutex;
   pthread_cond_t  mArmsMsgReady;
 
-  ARMS_R_MSG      mRecMsg;
-  ARMS_S_MSG      mSendMsg;
+  ARMS_R_MSG           mRecMsg;
+  ARMS_TENSIONS_MSG    mRecTensionMsg;
+
+  ARMS_S_MSG           mSendMsg;
+  ARMS_S_TENSIONS_MSG  mSendTensionMsg;
+
 
   //log queue pri
   STR_QUEUE* mLogQueue;

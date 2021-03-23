@@ -24,12 +24,13 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
 
 ///msg functions/////////////////
-static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t mCrcCode);
+static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors);
 
 static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg);
-
+static int32_t checkHardError(uint16_t mStatusCode);
 //pTmodule cmd or data send to client
-static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint16_t mCrcCode);
+static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel);
+static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -99,7 +100,7 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
 
 
 ///msg functions/////////////////
-static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t mCrcCode)
+static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
 {
   int32_t iRet = 0;
   if(pMsg == NULL)
@@ -119,12 +120,12 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t
   pMsg->mSysTime.mSysTimeS  = now.tv_sec;
   pMsg->mSysTime.mSysTimeUs = now.tv_nsec/1000;
 
-  pMsg->mCrcCode = mCrcCode;
+  pMsg->mCrcCode = 0;
 
   return iRet;
 }
 
-static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint16_t mCrcCode)
+static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel)
 {
   int32_t iRet = 0;
 
@@ -132,12 +133,25 @@ static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors,
   for(int i=0; i<4; i++)
   {
     mMotors.mMotorsCmd[i].mCmd = mCtrl;
+
+    if(mDirection)
+      mMotors.mMotorsCmd[i].mCmd |= (0x0100);
+
+    if(mPosOrVel)
+      mMotors.mMotorsCmd[i].mCmd |= (0x0200);
   }
-  packageFrame(&pTModule->mSendMsg,  mMotors, mCrcCode);
-  iRet = sendto(pTModule->mSocket, &pTModule->mSendMsg, sizeof(BASE::ARMS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
+  iRet = motorCmd(pTModule, mMotors);
+
   return  iRet;
 }
 
+static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors)
+{
+  int32_t iRet = 0;
+  packageFrame(&pTModule->mSendMsg,  mMotors);
+  iRet = sendto(pTModule->mSocket, &pTModule->mSendMsg, sizeof(BASE::ARMS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
+  return  iRet;
+}
 
 static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg)
 {
@@ -147,12 +161,22 @@ static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg)
   //check all start
   for(int i=0; i<4; i++)
   {
-    if((mRecMsg.mMotors[i].mMotorStateCode % 2) == BASE::ST_MOTOR_STOP)
+    if(((mRecMsg.mMotors[i].mMotorStateCode>>1) % 2))
     {
       iRet |= motorBit;
     }
     motorBit << 1;
   }
+
+  return iRet;
+}
+
+static int32_t checkHardError(uint16_t mStatusCode)
+{
+  int32_t iRet = 0;
+
+  if(mStatusCode%2)
+    iRet = 1;
 
   return iRet;
 }
@@ -192,7 +216,7 @@ void* threadEntry(void* pModule)
   uint16_t mCrc = 0;
   //motors data
   BASE::MOTORS lMotors;
-  uint32_t     lArmsStateCode;
+  uint16_t     lArmsStateCode;
 
   LOGER::PrintfLog("%s running!",pTModule->mThreadName);
   //running state
@@ -210,71 +234,65 @@ void* threadEntry(void* pModule)
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
     //TUDO*****
     lArmsStateCode = (size != sizeof(BASE::ARMS_R_MSG)) ? BASE::ST_SYS_REC_ERROR : pTModule->mRecMsg.mStateCode;
+    memset((char*)&lMotors, 0, sizeof(lMotors));
 
+    //hard error
+    if(checkHardError(lArmsStateCode))
+    {
+      LOGER::PrintfLog("hard error.statues code :%d",lArmsStateCode);
+
+      //stop all modules
+      pTModule->mState = BASE::M_STATE_STOP;
+      //TODU
+    }
     //send
     switch (pTModule->mState)
     {
       case BASE::M_STATE_INIT:
       {
-        if(lArmsStateCode == BASE::ST_SYS_STATE_OK)
+        uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
+        //check motor is power on
+        if(mMotorState == 0) // motor 0000  all start,then change state
         {
-          //check motor is power on
-          if(checkMotorsState(pTModule->mRecMsg) == 0) // motor 0000  all start
-          {
-            //TUDO send 0 let arms wait
-            memset((char*)&lMotors, 0, sizeof(lMotors));
-            //zero
-            motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_ZERO, mCrc);
-            pTModule->mAckState = BASE::ACK_STATE_INIT_OK;
-          }
-          else if(checkMotorsState(pTModule->mRecMsg) == 0xF) // motor 1111  all stop
-          {
-            //motor power on
-            int iRet =  motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_POWERON, mCrc);
-            LOGER::PrintfLog("test log hear");
-          }
-        }
+          //TUDO send 0 let arms wait
+          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
 
+          if(pTModule->mAckState != BASE::ACK_STATE_INIT_OK)
+            pTModule->mAckState = BASE::ACK_STATE_INIT_OK;
+        }
+        else //some motors is stop
+        {
+          for (int i=0;i<4;i++)
+          {
+            //i motor is stop,then send cmd to start
+            lMotors.mMotorsCmd[i].mCmd = (mMotorState%2) ? BASE::CT_MOTOR_POWERON : BASE::CT_MOTOR_RUN;
+
+            mMotorState = (mMotorState>>1);
+          }
+          //motor power on
+          int iRet =  motorCmd(pTModule, lMotors);
+          LOGER::PrintfLog("power on motors!");
+        }
         break;
       }
       case BASE::M_STATE_CONF:
       {
-        //TUDO
-        if(lArmsStateCode == BASE::ST_SYS_STATE_OK)
-        {
-          //TUDO cal******,save all data to interactioner
-
-          //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
-          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_SPEED, mCrc);
-        }
-        else
-        {
-          LOGER::PrintfLog("error code:%d\n", lArmsStateCode);
-          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_STOP, mCrc);
-          pTModule->mState = BASE::M_STATE_STOP;
-        }
+        //TUDO*******
+        //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
+        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
         break;
       }
       case BASE::M_STATE_RUN:
       {
-        //TUDO
-        if(lArmsStateCode == BASE::ST_SYS_STATE_OK)
-        {
-          //TUDO PID ctrl move to (x y z)
+        //TUDO*******
+        //TUDO PID ctrl move to (x y z)
+        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
 
-          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_SPEED, mCrc);
-        }
-        else
-        {
-          LOGER::PrintfLog("error code:%d\n", lArmsStateCode);
-          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_STOP, mCrc);
-          pTModule->mState = BASE::M_STATE_STOP;
-        }
         break;
       }
       case BASE::M_STATE_STOP:
       {
-        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_POWERDOWN, mCrc);
+        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_POWERDOWN, 0, 0);
         pTModule->mWorking = false;
         break;
       }
@@ -284,7 +302,7 @@ void* threadEntry(void* pModule)
       }
     }
 
-    mCrc++;
+    //mCrc++;
   }
 
   moduleEndUp(pTModule);

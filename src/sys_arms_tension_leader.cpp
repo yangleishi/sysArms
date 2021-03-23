@@ -23,6 +23,8 @@ static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
 
+static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, uint8_t mCmd);
+static int packageFrame(BASE::ARMS_S_TENSIONS_MSG* pMsg, uint8_t mCmd);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -66,6 +68,9 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
 
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
 {
+  //stop rec
+  motorCmd(pTModule, 1);
+
   if(pTModule->mSocket >= 0)
   {
     close(pTModule->mSocket);
@@ -75,6 +80,40 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
   return 0;
 }
 
+///msg functions/////////////////
+static int packageFrame(BASE::ARMS_S_TENSIONS_MSG* pMsg, uint8_t mCmd)
+{
+  int32_t iRet = 0;
+  if(pMsg == NULL)
+  {
+    return -1;
+  }
+
+  struct timespec now;
+
+  pMsg->mFrameStart = 0x1ACF;
+  pMsg->mIdentifier = 0xFF;
+  pMsg->mApid = 0x04;
+  pMsg->mType = 0x01;
+
+  clock_gettime(CLOCK_MONOTONIC, &now);
+  pMsg->mSysTime.mSysTimeS  = now.tv_sec;
+  pMsg->mSysTime.mSysTimeUs = now.tv_nsec/1000;
+
+  pMsg->mCmd = mCmd;
+  pMsg->mCrcCode = 0;
+
+  return iRet;
+}
+
+
+static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, uint8_t mCmd)
+{
+  int32_t iRet = 0;
+  packageFrame(&pTModule->mSendTensionMsg,  mCmd);
+  iRet = sendto(pTModule->mSocket, &pTModule->mSendTensionMsg, sizeof(BASE::ARMS_S_TENSIONS_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
+  return  iRet;
+}
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -101,6 +140,10 @@ void* threadEntry(void* pModule)
   BASE::ARMS_TENSIONS_MSG mRecMsg;
   //running state
   LOGER::PrintfLog("%s running!",pTModule->mThreadName);
+
+  uint8_t  lTensionStateCode = 0;
+  uint8_t  bFirstRec = 1;
+
   while(pTModule->mWorking)
   {
     //rec UDP
@@ -114,7 +157,23 @@ void* threadEntry(void* pModule)
     }
 
     //rec tension data
+    lTensionStateCode = mRecMsg.mStateCode;
 
+    //error*******
+    if((lTensionStateCode%2) != 0)
+    {
+      LOGER::PrintfLog("hard error. state code:%d", mRecMsg.mTensionsStateCode);
+      continue;
+    }
+
+    //tension data
+    if(bFirstRec)
+    {
+      //start send msg. 0 :start.  1: stop
+      motorCmd(pTModule, 0);
+      bFirstRec = 0;
+      continue;
+    }
   }
 
   moduleEndUp(pTModule);
