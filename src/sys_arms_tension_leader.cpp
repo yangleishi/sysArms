@@ -19,12 +19,15 @@
 namespace TENSIONLEADER {
 
 
-static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
-static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
-static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
+BASE::TENSIONS_S_MSG    mSendTensionMsg;
+BASE::TENSIONS_R_MSG    mRecTensionMsg;
 
-static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, uint8_t mCmd);
-static int packageFrame(BASE::ARMS_S_TENSIONS_MSG* pMsg, uint8_t mCmd);
+static int  initServer(BASE::TENSIONS_THREAD_INFO *pTModule);
+static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
+static int moduleEndUp(BASE::TENSIONS_THREAD_INFO *pTModule);
+
+static int motorCmd(BASE::TENSIONS_THREAD_INFO *pTModule, uint8_t mCmd);
+static int packageFrame(BASE::TENSIONS_S_MSG* pMsg, uint8_t mCmd);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +43,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
 }
 
 
-static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
+static int initServer(BASE::TENSIONS_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
 
@@ -66,7 +69,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
 }
 
 
-static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
+static int moduleEndUp(BASE::TENSIONS_THREAD_INFO *pTModule)
 {
   //stop rec
   motorCmd(pTModule, 1);
@@ -81,7 +84,7 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
 }
 
 ///msg functions/////////////////
-static int packageFrame(BASE::ARMS_S_TENSIONS_MSG* pMsg, uint8_t mCmd)
+static int packageFrame(BASE::TENSIONS_S_MSG* pMsg, uint8_t mCmd)
 {
   int32_t iRet = 0;
   if(pMsg == NULL)
@@ -107,11 +110,11 @@ static int packageFrame(BASE::ARMS_S_TENSIONS_MSG* pMsg, uint8_t mCmd)
 }
 
 
-static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, uint8_t mCmd)
+static int motorCmd(BASE::TENSIONS_THREAD_INFO *pTModule, uint8_t mCmd)
 {
   int32_t iRet = 0;
-  packageFrame(&pTModule->mSendTensionMsg,  mCmd);
-  iRet = sendto(pTModule->mSocket, &pTModule->mSendTensionMsg, sizeof(BASE::ARMS_S_TENSIONS_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
+  packageFrame(&mSendTensionMsg,  mCmd);
+  iRet = sendto(pTModule->mSocket, &mSendTensionMsg, sizeof(BASE::TENSIONS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
   return  iRet;
 }
 ////////////////////////////////////////////////////////////////////////////////
@@ -119,7 +122,7 @@ static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, uint8_t mCmd)
 ////////////////////////////////////////////////////////////////////////////////
 void* threadEntry(void* pModule)
 {
-  BASE::ARMS_THREAD_INFO *pTModule =(BASE::ARMS_THREAD_INFO *) pModule;
+  BASE::TENSIONS_THREAD_INFO *pTModule =(BASE::TENSIONS_THREAD_INFO *) pModule;
   if(NULL == pTModule)
   {
     return 0;
@@ -137,7 +140,7 @@ void* threadEntry(void* pModule)
   //motors data
   uint32_t     lArmsStateCode;
 
-  BASE::ARMS_TENSIONS_MSG mRecMsg;
+  BASE::TENSIONS_R_MSG mRecMsg;
   //running state
   LOGER::PrintfLog("%s running!",pTModule->mThreadName);
 
@@ -147,10 +150,10 @@ void* threadEntry(void* pModule)
   while(pTModule->mWorking)
   {
     //rec UDP
-    int size = recvfrom(pTModule->mSocket , (char*)&(mRecMsg), sizeof(BASE::ARMS_TENSIONS_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
+    int size = recvfrom(pTModule->mSocket , (char*)&(mRecMsg), sizeof(BASE::TENSIONS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
 
     //TUDO*****
-    if(size != sizeof(BASE::ARMS_TENSIONS_MSG))
+    if(size != sizeof(BASE::TENSIONS_R_MSG))
     {
       LOGER::PrintfLog("tension thread rec overtime or error!");
       continue;
@@ -174,6 +177,11 @@ void* threadEntry(void* pModule)
       bFirstRec = 0;
       continue;
     }
+
+    //copy tensins data to supr
+    pTModule->mNowTensionMsg[mRecMsg.mIdentifier].mTensions = mRecMsg.mTensions;
+    pTModule->mNowTensionMsg[mRecMsg.mIdentifier].iNewTensions = true;
+
   }
 
   moduleEndUp(pTModule);

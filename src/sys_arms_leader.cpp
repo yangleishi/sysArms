@@ -31,6 +31,8 @@ static int32_t checkHardError(uint16_t mStatusCode);
 //pTmodule cmd or data send to client
 static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel);
 static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors);
+
+static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule, int devInt);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -180,6 +182,11 @@ static int32_t checkHardError(uint16_t mStatusCode)
 
   return iRet;
 }
+
+static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule, int devInt)
+{
+  return  pTModule->mNowTensionMsg[devInt].iNewTensions ? pTModule->mNowTensionMsg[devInt].mTensions : -1.0;
+}
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -203,6 +210,12 @@ void* threadEntry(void* pModule)
     LOGER::PrintfLog("%s  bind server ip failed, check network again !", pTModule->mThreadName);
     moduleEndUp(pTModule);
     pTModule->mWorking = false;
+
+    //working bit set 1,stop
+    pthread_mutex_lock(pTModule->mCheckWorkingMutex);
+    *pTModule->mWorkingBit |= ((0x0001)<<(pTModule->mSerialNumber));
+    pthread_mutex_unlock(pTModule->mCheckWorkingMutex);
+
     return 0;
   }
 
@@ -286,14 +299,20 @@ void* threadEntry(void* pModule)
       {
         //TUDO*******
         //TUDO PID ctrl move to (x y z)
-        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
+        pTModule->mNewRecMsg = true;
+        float tensiosV = readTensionValue(pTModule,  pTModule->mRecMsg.mIdentifier);
 
+        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
         break;
       }
       case BASE::M_STATE_STOP:
       {
         motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_POWERDOWN, 0, 0);
         pTModule->mWorking = false;
+        //working bit set 1,stop
+        pthread_mutex_lock(pTModule->mCheckWorkingMutex);
+        *pTModule->mWorkingBit |= ((0x0001)<<(pTModule->mSerialNumber));
+        pthread_mutex_unlock(pTModule->mCheckWorkingMutex);
         break;
       }
       default:

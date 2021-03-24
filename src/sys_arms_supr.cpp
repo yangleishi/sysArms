@@ -27,9 +27,16 @@ namespace SUPR {
 
 //thread parame
 BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_ARMS_NUMS];
-BASE::ARMS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
+BASE::TENSIONS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
 BASE::LOG_THREAD_INFO  mlogsModule;
 BASE::INTERACTION_THREAD_INFO mManInteraction;
+
+//tensions value
+BASE::TENSIONS_NEW_MSG mTensionsData[DEF_SYS_ARMS_NUMS];
+
+//if arms is working then the bit is 0.else 1
+pthread_mutex_t mArmsWorkingMutex;
+static uint16_t mArmsWorkingBits = 0x07ff;
 
 static BASE::STR_QUEUE *mLogQueue = NULL;
 
@@ -55,7 +62,8 @@ static int32_t startModules(void);
 static int32_t suprMainLoop();
 static void signalHandle(int mSignal);
 static BASE::STR_QUEUE * qCreate(void);
-static void checkSysError();
+static void checkArmsWorking();
+static void handleArmsCrossing();
 static void changeState();
 
 static int32_t deInitSupr(void);
@@ -165,6 +173,10 @@ static int32_t initSupr(void) {
   pthread_cond_init(&mlogsModule.mPrintQueueReady, NULL);
   mLogQueue = qCreate();
 
+
+  //check arms working bits mutex
+  pthread_mutex_init(&mArmsWorkingMutex, NULL);
+
   signal(SIGINT, signalHandle);
 
   ///////cpu latency set 0us
@@ -215,8 +227,13 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mSerPort = CONF::MN_SERVER_PORT[qIdx-1];
     mArmsModule[qIdx-1].mState = BASE::M_STATE_INIT;
     mArmsModule[qIdx-1].mAckState = BASE::ACK_STATE_NULL;
+    mArmsModule[qIdx-1].mWorkingBit = &mArmsWorkingBits;
+    mArmsModule[qIdx-1].mSerialNumber = qIdx-1;
+    mArmsModule[qIdx-1].mNewRecMsg = false;
+    mArmsModule[qIdx-1].mNowTensionMsg  = mTensionsData;
   }
-
+  // 00000000000
+  mArmsWorkingBits = 0;
 
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < CONF::ARMS_M_MAX_ID; qIdx++)
   {
@@ -238,6 +255,7 @@ static int32_t startModules(void) {
     strcpy(mArmsTension[qIdx].mThreadName, CONF::MN_TENSION_NAME[qIdx]);
     memcpy(mArmsTension[qIdx].mIpV4Str, CONF::MN_TENSION_SERVER_IP[qIdx], sizeof(CONF::MN_TENSION_SERVER_IP[qIdx]));
     mArmsTension[qIdx].mSerPort = CONF::MN_TENSION_SERVER_PORT[qIdx];
+    mArmsTension[qIdx].mNowTensionMsg  = mTensionsData;
   }
 
 
@@ -254,42 +272,41 @@ static int32_t startModules(void) {
 }
 
 
-static void checkSysError()
+static void checkArmsWorking()
 {
   int32_t iRet = 0;
 
-  for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
-  {
-    if(!mArmsModule[qIdx].mWorking)
-      iRet++;
-  }
-
   //no arm stop
-  if(iRet == 0)
+  if(mArmsWorkingBits == 0)
     return;
 
-  //all stop
-  if(iRet == DEF_SYS_ARMS_NUMS)
+  if(mArmsWorkingBits == 0x07ff) //all stop
   {
     suprWorking = 0;
-
     //stop tensions
     for (int qIdx = 0; qIdx < DEF_SYS_TENSIONLEADER_NUMS; qIdx++)
       mArmsTension[qIdx].mWorking = false;
-
     //stop interaction
     mManInteraction.mWorking = false;
-    return;
   }
-
-
-  if(iRet != 0)
+  else //some stop
   {
     for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
       if(mArmsModule[qIdx].mWorking)
           mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
   }
 
+}
+
+//TUDO *********
+static void handleArmsCrossing()
+{
+  //check all arms rec msg
+  //TODU*******  calculation and check arms are crossing
+
+  //set all arms rec msg false.until nest msg come
+  for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+    mArmsModule[i].mNewRecMsg = false;
 }
 
 static void changeState()
@@ -386,8 +403,15 @@ static int32_t suprMainLoop(){
      }
 
     // if one arm error then set other stop, or man-interaction error set stop
-    checkSysError();
+    checkArmsWorking();
 
+    // check arms  whether  crossed
+    if(mSysState == BASE::M_STATE_RUN)
+    {
+      handleArmsCrossing();
+    }
+
+    //aotu change arms state,init conf run stop ...
     changeState();
 
     for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
@@ -395,7 +419,7 @@ static int32_t suprMainLoop(){
       pthread_cond_signal(&mArmsModule[qIdx].mArmsMsgReady);
     }
 
-    //notice loger cycle log
+    //notice loger cycle write log
     pthread_cond_signal(&mlogsModule.mPrintQueueReady);
 
   }
@@ -427,6 +451,8 @@ static int32_t deInitSupr(void)
   }
 
   pthread_cond_destroy(&mlogsModule.mPrintQueueReady);
+  pthread_mutex_destroy(&mArmsWorkingMutex);
+
   if(mLogQueue != NULL)
   {
     free(mLogQueue);

@@ -153,10 +153,10 @@ typedef struct
   // frame time
   SYS_TIME  mSysTime;
 
-} ARMS_S_MSG_HEARDER;
+} MSG_S_HEARDER;
 
 // UDP, send control data structure. 11 arms
-typedef struct: public ARMS_S_MSG_HEARDER
+typedef struct: public MSG_S_HEARDER
 {
   //ctrl motors data
   MOTORS    mMotors;
@@ -166,14 +166,14 @@ typedef struct: public ARMS_S_MSG_HEARDER
 } ARMS_S_MSG;
 
 // UDP, send control data structure tensions
-typedef struct: public ARMS_S_MSG_HEARDER
+typedef struct: public MSG_S_HEARDER
 {
   //ctrl tensions start/stop data. 0 1
   uint8_t    mCmd;
 
   //mCrcCode++
   uint16_t mCrcCode;
-} ARMS_S_TENSIONS_MSG;
+} TENSIONS_S_MSG;
 
 ///////////////////////////////////
 //Motor rec datas
@@ -263,8 +263,15 @@ typedef struct
   float     mTensions;
   //mCrcCode++
   uint16_t  mCrcCode;
-} ARMS_TENSIONS_MSG;
+} TENSIONS_R_MSG;
 
+
+//tensions. float data.leader use the value
+typedef struct
+{
+  float   mTensions;
+  bool    iNewTensions;
+} TENSIONS_NEW_MSG;
 
 ///////////////////////////////////
 // interaction data structure
@@ -305,18 +312,6 @@ typedef struct
 //  Each thread runs parameters
 typedef struct
 {
-  bool             mWorking;
-  char         mThreadName[15];
-
-  M_STATE          mState;
-  pthread_cond_t   mPrintQueueReady;
-
-  STR_QUEUE* mLogQueue;
-
-} LOG_THREAD_INFO;
-
-typedef struct
-{
   bool         mWorking;
   char         mThreadName[15];
 
@@ -325,26 +320,55 @@ typedef struct
   uint32_t     mSerPort;
   char         mIpV4Str[STR_IPV4_LENGTH];
   M_STATE      mState;
-  ACK_STATE    mAckState;
-  pthread_mutex_t mArmsMsgMutex;
-  pthread_cond_t  mArmsMsgReady;
-
-  ARMS_R_MSG           mRecMsg;
-  ARMS_TENSIONS_MSG    mRecTensionMsg;
-
-  ARMS_S_MSG           mSendMsg;
-  ARMS_S_TENSIONS_MSG  mSendTensionMsg;
-
 
   //log queue pri
   STR_QUEUE* mLogQueue;
+} THREAD_INFO_HEADER;
+
+//loger thread info
+typedef struct
+{
+  bool         mWorking;
+  char         mThreadName[15];
+
+  M_STATE      mState;
+
+  pthread_cond_t   mPrintQueueReady;
+  STR_QUEUE* mLogQueue;
+} LOG_THREAD_INFO;
+
+
+//11 arms thread info
+typedef struct: public THREAD_INFO_HEADER
+{
+  ACK_STATE            mAckState;
+
+  bool                 mNewRecMsg;
+  ARMS_R_MSG           mRecMsg;
+  ARMS_S_MSG           mSendMsg;
+  pthread_mutex_t mArmsMsgMutex;
+  pthread_cond_t  mArmsMsgReady;
+
+  pthread_mutex_t *mCheckWorkingMutex;
+  uint16_t        *mWorkingBit;   //all arms thread working bit
+  int             mSerialNumber;  //0 1 2.... not dev int
+
+  TENSIONS_NEW_MSG   *mNowTensionMsg;
 } ARMS_THREAD_INFO;
 
-struct INTERACTION_THREAD_INFO : public ARMS_THREAD_INFO
+//tensions thread info
+typedef struct: public THREAD_INFO_HEADER
+{
+  TENSIONS_NEW_MSG   *mNowTensionMsg;
+} TENSIONS_THREAD_INFO;
+
+
+//interaction thread info
+typedef struct: public THREAD_INFO_HEADER
 {
   bool      mIsStataChange;
   M_STATE   mNewState;
-};
+}INTERACTION_THREAD_INFO;
 
 }  //namespace
 
