@@ -92,8 +92,8 @@ const int SERVER_UDP_TIMEOUT_S = 0;
 const int SERVER_UDP_TIMEOUT_US = 5000;
 
 //m us rec tensions
-const int SERVER_UDP_TENSION_TIMEOUT_S = 0;
-const int SERVER_UDP_TENSION_TIMEOUT_US = 900000;
+const int SERVER_UDP_TENSION_TIMEOUT_S = 1;
+const int SERVER_UDP_TENSION_TIMEOUT_US = 0;
 
 //m us rec interaction
 const int SERVER_UDP_INTERACTION_TIMEOUT_S = 1;
@@ -101,8 +101,8 @@ const int SERVER_UDP_INTERACTION_TIMEOUT_US = 0;
 
 //Define priority for modules
 const int PRI_SUPR = 50;
-const int PRI_LEAD = 70;
-
+const int PRI_LEAD = 40;
+const int PRI_LOGER = 30;
 
 }  //namespace
 

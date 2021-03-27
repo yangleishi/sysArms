@@ -18,7 +18,7 @@
 
 #define STR_IPV4_LENGTH     16
 
-#define	PRINT_QUEUE_MAX_ITEMS		1024
+#define	PRINT_QUEUE_MAX_ITEMS		5120
 #define	PRINT_STRING_MAX_LENGTH		128
 
 namespace BASE {
@@ -41,6 +41,14 @@ typedef enum
   ACK_STATE_NULL = 100,
   ACK_STATE_INIT_OK,
 } ACK_STATE;
+
+//DEFINE THREAD recfrom state
+typedef enum
+{
+  F_STATE_UNLINK = 0,
+  F_STATE_LINK,
+  F_STATE_OVERTIME,
+} REC_UDP_STATE;
 
 ////////////////////////////////////11 arms  UDP communication protocol   /////////////////////////////////////
 
@@ -323,6 +331,10 @@ typedef struct
 
   //log queue pri
   STR_QUEUE* mLogQueue;
+  pthread_mutex_t *mPrintQueueMutex;
+
+  //cpu mask
+  uint8_t         mCpuAffinity;
 } THREAD_INFO_HEADER;
 
 //loger thread info
@@ -333,8 +345,12 @@ typedef struct
 
   M_STATE      mState;
 
+  pthread_mutex_t *mPrintQueueMutex;
   pthread_cond_t   mPrintQueueReady;
   STR_QUEUE* mLogQueue;
+
+  //cpu mask
+  uint8_t         mCpuAffinity;
 } LOG_THREAD_INFO;
 
 
@@ -348,9 +364,6 @@ typedef struct: public THREAD_INFO_HEADER
   ARMS_S_MSG           mSendMsg;
   pthread_mutex_t mArmsMsgMutex;
   pthread_cond_t  mArmsMsgReady;
-
-  pthread_mutex_t *mCheckWorkingMutex;
-  uint16_t        *mWorkingBit;   //all arms thread working bit
   int             mSerialNumber;  //0 1 2.... not dev int
 
   TENSIONS_NEW_MSG   *mNowTensionMsg;

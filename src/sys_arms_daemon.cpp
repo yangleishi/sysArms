@@ -157,13 +157,22 @@ void hiGetThreadPri(pthread_t pPid) {
   return;
 }
 
-
 void hiSetThreadsched(pthread_t pPid, const int32_t iPriority) {
   struct sched_param schedParam;
   memset(&schedParam, 0, sizeof(schedParam));
   schedParam.sched_priority = iPriority;
   pthread_setschedparam(pPid, SCHED_FIFO, &schedParam);
   return;
+}
+
+void hiSetCpuAffinity(int mCpuI)
+{
+    //return;
+  cpu_set_t mask;
+  CPU_ZERO(&mask);
+  CPU_SET(mCpuI, &mask);
+
+  pthread_setaffinity_np(pthread_self(), sizeof(mask),&mask);
 }
 
 }  //namespace

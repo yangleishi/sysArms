@@ -21,6 +21,7 @@ pthread_t hiCreateThread(const char * cThreadName,
 void hiGetThreadPri(pthread_t pPid);
 void hiSetThreadsched(pthread_t pPid, const int32_t iPriority);
 
+void hiSetCpuAffinity(int mCpuI);
 }
 
 

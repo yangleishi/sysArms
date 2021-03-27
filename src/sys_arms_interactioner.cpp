@@ -17,6 +17,7 @@
 #include "sys_arms_defs.h"
 #include "sys_arms_conf.hpp"
 #include "sys_arms_interactioner.hpp"
+#include "sys_arms_daemon.hpp"
 
 //sys config parame
 struct configItem
@@ -36,9 +37,13 @@ static configItem mParames[DEF_SYS_ARMS_NUMS] = {0};
 
 namespace INTERACTIONER {
 
+static char printfC[100] = {0};
+pthread_mutex_t *mPrintQueueMutex = NULL;
 
 static int initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
+
+static void printLoger(const char* sLog);
 
 //config file
 static int readConfig(configItem  * mParame, const int mPNum);
@@ -53,9 +58,10 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   timeout.tv_usec = mUsec;//微秒
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
   {
-    LOGER::PrintfLog("setsockopt failed:");
+    LOGER::PrintfLog("interaction set fd error\n");
   }
 }
+
 
 static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule)
 {
@@ -92,7 +98,7 @@ static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  LOGER::PrintfLog("endup  ");
+  LOGER::PrintfLog((char*)"interaction endup \n");
   return 0;
 }
 
@@ -107,7 +113,7 @@ static int readConfig(configItem * mParame, const int mPNum)
   {
     if((pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "w")) == NULL)
     {
-        printf("--------------\n");
+        LOGER::PrintfLog("--------------\n");
         return  -1;
     }
 
@@ -181,12 +187,15 @@ void* threadEntry(void* pModule)
   {
     return 0;
   }
+  BASE::hiSetCpuAffinity(pTModule->mCpuAffinity);
+
+  mPrintQueueMutex = pTModule->mPrintQueueMutex;
 
   readConfig(mParames, DEF_SYS_ARMS_NUMS);
 
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog("%s  bind server ip failed, check network again !", pTModule->mThreadName);
+    LOGER::PrintfLog((char*)"interaction  bind server ip failed, check network again !");
     moduleEndUp(pTModule);
     pTModule->mWorking = false;
     return 0;
@@ -198,20 +207,20 @@ void* threadEntry(void* pModule)
   //running state
   pTModule->mState = BASE::M_STATE_RUN;
 
-  LOGER::PrintfLog("%s running!",pTModule->mThreadName);
+  LOGER::PrintfLog((char*)"interaction running!");
   while(pTModule->mWorking)
   {
     //rec UDP************TODU
     //int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
     //TUDO*****
     //lArmsStateCode = (size != sizeof(BASE::ARMS_R_MSG)) ? BASE::ST_SYS_REC_ERROR : pTModule->mRecMsg.mSysState;
-
+    sleep(1);
     //TODU
     switch (pTModule->mState)
     {
       case BASE::M_STATE_INIT:
       {
-        LOGER::PrintfLog("test log hear");
+        LOGER::PrintfLog((char*)"test log hear");
         break;
       }
       case BASE::M_STATE_RUN:

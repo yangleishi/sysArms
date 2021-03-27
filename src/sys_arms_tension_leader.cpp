@@ -14,6 +14,7 @@
 #include "sys_arms_defs.h"
 #include "sys_arms_conf.hpp"
 #include "sys_arms_loger.hpp"
+#include "sys_arms_daemon.hpp"
 
 
 namespace TENSIONLEADER {
@@ -48,7 +49,7 @@ static int initServer(BASE::TENSIONS_THREAD_INFO *pTModule)
   int32_t iRet = 0;
 
   if((pTModule->mSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-      LOGER::PrintfLog("socket creat Failed");
+      LOGER::PrintfLog((char*)"socket creat Failed");
       return -1;
   }
 
@@ -79,7 +80,7 @@ static int moduleEndUp(BASE::TENSIONS_THREAD_INFO *pTModule)
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  LOGER::PrintfLog("tension leader endup");
+  LOGER::PrintfLog((char*)"tension leader endup");
   return 0;
 }
 
@@ -128,9 +129,12 @@ void* threadEntry(void* pModule)
     return 0;
   }
 
+  //leader run in cpux
+  BASE::hiSetCpuAffinity(pTModule->mCpuAffinity);
+
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog("%s  bind server ip failed, check network again !", pTModule->mThreadName);
+    LOGER::PrintfLog((char*)"tension  bind server ip failed, check network again !");
     moduleEndUp(pTModule);
     return 0;
   }
@@ -142,7 +146,7 @@ void* threadEntry(void* pModule)
 
   BASE::TENSIONS_R_MSG mRecMsg;
   //running state
-  LOGER::PrintfLog("%s running!",pTModule->mThreadName);
+  LOGER::PrintfLog((char*)"tension running!");
 
   uint8_t  lTensionStateCode = 0;
   uint8_t  bFirstRec = 1;
@@ -151,11 +155,12 @@ void* threadEntry(void* pModule)
   {
     //rec UDP
     int size = recvfrom(pTModule->mSocket , (char*)&(mRecMsg), sizeof(BASE::TENSIONS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-
+    //int size = 0;
+    //sleep(1);
     //TUDO*****
     if(size != sizeof(BASE::TENSIONS_R_MSG))
     {
-      LOGER::PrintfLog("tension thread rec overtime or error!");
+      LOGER::PrintfLog("%s tension thread rec overtime or error!", pTModule->mThreadName);
       continue;
     }
 
@@ -165,7 +170,7 @@ void* threadEntry(void* pModule)
     //error*******
     if((lTensionStateCode%2) != 0)
     {
-      LOGER::PrintfLog("hard error. state code:%d", mRecMsg.mTensionsStateCode);
+      LOGER::PrintfLog((char*)"hard error. state code:%d", lTensionStateCode);
       continue;
     }
 

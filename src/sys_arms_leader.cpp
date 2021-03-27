@@ -14,8 +14,11 @@
 #include "sys_arms_leader.hpp"
 #include "sys_arms_defs.h"
 #include "sys_arms_loger.hpp"
+#include "sys_arms_daemon.hpp"
 
 namespace LEADER {
+
+static pthread_mutex_t *mPrintQueueMutex = NULL;
 
 static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdNonblocking(int sockfd);
@@ -58,7 +61,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   timeout.tv_usec = mUsec;//微秒
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
   {
-    LOGER::PrintfLog("setsockopt failed:");
+    LOGER::PrintfLog((char*)"setsockopt failed:");
   }
 }
 
@@ -67,7 +70,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   int32_t iRet = 0;
 
   if((pTModule->mSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-      LOGER::PrintfLog("socket creat Failed");
+      LOGER::PrintfLog((char*)"socket creat Failed");
       return -1;
   }
 
@@ -96,7 +99,7 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  LOGER::PrintfLog("endup  ");
+  LOGER::PrintfLog("%s leader endup", pTModule->mThreadName);
   return 0;
 }
 
@@ -204,17 +207,14 @@ void* threadEntry(void* pModule)
   {
     return 0;
   }
+  //leader run in cpux
+  BASE::hiSetCpuAffinity(pTModule->mCpuAffinity);
 
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog("%s  bind server ip failed, check network again !", pTModule->mThreadName);
+    LOGER::PrintfLog((char*)"leader bind server ip failed, check network again !");
     moduleEndUp(pTModule);
     pTModule->mWorking = false;
-
-    //working bit set 1,stop
-    pthread_mutex_lock(pTModule->mCheckWorkingMutex);
-    *pTModule->mWorkingBit |= ((0x0001)<<(pTModule->mSerialNumber));
-    pthread_mutex_unlock(pTModule->mCheckWorkingMutex);
 
     return 0;
   }
@@ -230,8 +230,9 @@ void* threadEntry(void* pModule)
   //motors data
   BASE::MOTORS lMotors;
   uint16_t     lArmsStateCode;
+  BASE::REC_UDP_STATE  recUdpLink = BASE::F_STATE_UNLINK;
 
-  LOGER::PrintfLog("%s running!",pTModule->mThreadName);
+  LOGER::PrintfLog("%s leader running!", pTModule->mThreadName);
   //running state
   while(pTModule->mWorking)
   {
@@ -242,28 +243,30 @@ void* threadEntry(void* pModule)
 
     pthread_mutex_unlock(&pTModule->mArmsMsgMutex);
 
-
-    //rec UDP
-    int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-    //TUDO*****
-    lArmsStateCode = (size != sizeof(BASE::ARMS_R_MSG)) ? BASE::ST_SYS_REC_ERROR : pTModule->mRecMsg.mStateCode;
-    memset((char*)&lMotors, 0, sizeof(lMotors));
-
-    //hard error
-    if(checkHardError(lArmsStateCode))
-    {
-      LOGER::PrintfLog("hard error.statues code :%d",lArmsStateCode);
-
-      //stop all modules
-      pTModule->mState = BASE::M_STATE_STOP;
-      //TODU
-    }
-    //send
+    //
     switch (pTModule->mState)
     {
       case BASE::M_STATE_INIT:
       {
+        int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
+        //check if no client link
+        if(size != sizeof(BASE::ARMS_R_MSG))
+        {
+          LOGER::PrintfLog("%s, no client link", pTModule->mThreadName);
+          break;
+        }
+
+        //link ok .check hard error
+        if(checkHardError(pTModule->mRecMsg.mStateCode))
+        {
+          LOGER::PrintfLog("hard error.statues code :%d", lArmsStateCode);
+          //stop all modules
+          pTModule->mState = BASE::M_STATE_STOP;
+          //TODU
+        }
+
         uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
+        LOGER::PrintfLog("motor state :%d", mMotorState);
         //check motor is power on
         if(mMotorState == 0) // motor 0000  all start,then change state
         {
@@ -284,7 +287,7 @@ void* threadEntry(void* pModule)
           }
           //motor power on
           int iRet =  motorCmd(pTModule, lMotors);
-          LOGER::PrintfLog("power on motors!");
+          LOGER::PrintfLog((char*)"power on motors!");
         }
         break;
       }
@@ -309,10 +312,6 @@ void* threadEntry(void* pModule)
       {
         motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_POWERDOWN, 0, 0);
         pTModule->mWorking = false;
-        //working bit set 1,stop
-        pthread_mutex_lock(pTModule->mCheckWorkingMutex);
-        *pTModule->mWorkingBit |= ((0x0001)<<(pTModule->mSerialNumber));
-        pthread_mutex_unlock(pTModule->mCheckWorkingMutex);
         break;
       }
       default:

@@ -8,6 +8,7 @@
 
 #ifndef SYS_ARMS_LOGER_HPP
 #define SYS_ARMS_LOGER_HPP
+#include <pthread.h>
 
 namespace LOGER{
 

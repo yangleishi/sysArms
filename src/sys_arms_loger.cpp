@@ -15,6 +15,7 @@
 #include "sys_arms_loger.hpp"
 #include "sys_arms_defs.h"
 #include "sys_arms_conf.hpp"
+#include "sys_arms_daemon.hpp"
 
 
 namespace LOGER {
@@ -120,6 +121,8 @@ void* threadEntry(void* pModule)
   {
     return 0;
   }
+  //leader run in cpux
+  BASE::hiSetCpuAffinity(pTModule->mCpuAffinity);
 
   if(initLoger(pTModule) != 0)
     pTModule->mState = BASE::M_STATE_STOP;
@@ -128,6 +131,7 @@ void* threadEntry(void* pModule)
   //running state
   pTModule->mState = BASE::M_STATE_RUN;
   LOGER::PrintfLog("%s running!",pTModule->mThreadName);
+  static uint32_t mm = 0;
   while(pTModule->mWorking)
   {
     //TUDO*****
