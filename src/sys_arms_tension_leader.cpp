@@ -39,7 +39,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   timeout.tv_usec = mUsec;//微秒
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
   {
-    LOGER::PrintfLog("setsockopt failed:");
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "setsockopt failed:");
   }
 }
 
@@ -49,7 +49,7 @@ static int initServer(BASE::TENSIONS_THREAD_INFO *pTModule)
   int32_t iRet = 0;
 
   if((pTModule->mSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-      LOGER::PrintfLog((char*)"socket creat Failed");
+      LOGER::PrintfLog(BASE::S_APP_LOGER, "socket creat Failed");
       return -1;
   }
 
@@ -80,7 +80,7 @@ static int moduleEndUp(BASE::TENSIONS_THREAD_INFO *pTModule)
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  LOGER::PrintfLog((char*)"tension leader endup");
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "tension leader endup");
   return 0;
 }
 
@@ -134,7 +134,7 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog((char*)"tension  bind server ip failed, check network again !");
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "tension  bind server ip failed, check network again !");
     moduleEndUp(pTModule);
     return 0;
   }
@@ -146,7 +146,7 @@ void* threadEntry(void* pModule)
 
   BASE::TENSIONS_R_MSG mRecMsg;
   //running state
-  LOGER::PrintfLog((char*)"tension running!");
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "tension running!");
 
   uint8_t  lTensionStateCode = 0;
   uint8_t  bFirstRec = 1;
@@ -160,7 +160,7 @@ void* threadEntry(void* pModule)
     //TUDO*****
     if(size != sizeof(BASE::TENSIONS_R_MSG))
     {
-      LOGER::PrintfLog("%s tension thread rec overtime or error!", pTModule->mThreadName);
+      LOGER::PrintfLog(BASE::S_APP_LOGER, "%s tension thread rec overtime or error!", pTModule->mThreadName);
       continue;
     }
 
@@ -170,7 +170,7 @@ void* threadEntry(void* pModule)
     //error*******
     if((lTensionStateCode%2) != 0)
     {
-      LOGER::PrintfLog((char*)"hard error. state code:%d", lTensionStateCode);
+      LOGER::PrintfLog(BASE::S_APP_LOGER, "hard error. state code:%d", lTensionStateCode);
       continue;
     }
 

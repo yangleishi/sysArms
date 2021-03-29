@@ -13,7 +13,6 @@
 #include <stdarg.h>
 
 #include "sys_arms_loger.hpp"
-#include "sys_arms_defs.h"
 #include "sys_arms_conf.hpp"
 #include "sys_arms_daemon.hpp"
 
@@ -21,8 +20,13 @@
 namespace LOGER {
 
 pthread_mutex_t mPrintQueueMutex;
-static BASE::STR_QUEUE *mQueue = NULL;
-static FILE *   pFile = NULL;
+//app loger
+static BASE::STR_QUEUE *mPrintQueue = NULL;
+static FILE *   pPrintFile = NULL;
+
+//app running data
+static BASE::STR_QUEUE *mArmsDataQueue = NULL;
+static FILE *   pArmsDataFile = NULL;
 
 /////queue //////////////
 static bool qEmpty(BASE::STR_QUEUE *q);
@@ -84,30 +88,40 @@ static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
 
-  mQueue = pTModule->mLogQueue;
+  mPrintQueue = pTModule->mLogQueue;
+  mArmsDataQueue = pTModule->mArmsDataQueue;
 
   pthread_mutex_init(&mPrintQueueMutex, NULL);
 
   //open log
-  pFile = fopen("sysArms.log", "a+");
-  if(pFile == NULL)
+  pPrintFile = fopen("sysArms.log", "a+");
+  if(pPrintFile == NULL)
   {
     return  -1;
   }
-
+  //open data log
+  pArmsDataFile = fopen("sysArms.data", "a+");
+  if(pArmsDataFile == NULL)
+  {
+    return  -1;
+  }
   return iRet;
 }
 
 static int moduleEndUp(BASE::LOG_THREAD_INFO *pTModule)
 {
-  mQueue = NULL;
+  mPrintQueue = NULL;
+  mArmsDataQueue = NULL;
 
   pthread_mutex_destroy(&mPrintQueueMutex);
 
-  if(pFile != NULL)
-    fclose(pFile);
+  if(pPrintFile != NULL)
+    fclose(pPrintFile);
 
-  printf("loger endup\n");
+  if(pArmsDataFile != NULL)
+    fclose(pArmsDataFile);
+
+  printf("loger all endup\n");
   return 0;
 }
 
@@ -127,10 +141,10 @@ void* threadEntry(void* pModule)
   if(initLoger(pTModule) != 0)
     pTModule->mState = BASE::M_STATE_STOP;
 
-  BASE::PRINT_STR mLog;
+  BASE::PRINT_STR mLog, mArmsDataStr;
   //running state
   pTModule->mState = BASE::M_STATE_RUN;
-  LOGER::PrintfLog("%s running!",pTModule->mThreadName);
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "%s running!",pTModule->mThreadName);
   static uint32_t mm = 0;
   while(pTModule->mWorking)
   {
@@ -139,22 +153,32 @@ void* threadEntry(void* pModule)
 
     pthread_cond_wait(&pTModule->mPrintQueueReady, &mPrintQueueMutex);
 
-    while(qDelete(mQueue, mLog.mString))
+    //app running loger
+    while(qDelete(mPrintQueue, mLog.mString))
     {
-      fprintf(pFile,"%s\n", mLog.mString);
+      fprintf(pPrintFile,"%s\n", mLog.mString);
       //printf("************%s\n", mLog.mString);
     }
+
+    //app running data
+    while(qDelete(mArmsDataQueue, mArmsDataStr.mString))
+    {
+      fprintf(pArmsDataFile,"%s\n", mArmsDataStr.mString);
+      //printf("************%s\n", mLog.mString);
+    }
+
     pthread_mutex_unlock(&mPrintQueueMutex);
 
-    fflush(pFile);
+    fflush(pPrintFile);
+    fflush(pArmsDataFile);
   }
 
   moduleEndUp(pTModule);
 }
 
-void PrintfLog(const char *fm, ...)
+void PrintfLog(BASE::LOG_SAVA_W mWhichLog, const char *fm, ...)
 {
-  if(mQueue == NULL)
+  if(mPrintQueue == NULL)
     return ;
 
   BASE::PRINT_STR mStr;
@@ -165,7 +189,10 @@ void PrintfLog(const char *fm, ...)
   va_end( args );
 
   pthread_mutex_lock(&mPrintQueueMutex);
-  qInsert(mQueue, mStr.mString);
+  if(mWhichLog == BASE::S_APP_LOGER)
+    qInsert(mPrintQueue, mStr.mString);
+  else if(mWhichLog == BASE::S_ARMS_DATA)
+    qInsert(mArmsDataQueue, mStr.mString);
   pthread_mutex_unlock(&mPrintQueueMutex);
 
 }

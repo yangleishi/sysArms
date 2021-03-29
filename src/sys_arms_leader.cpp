@@ -45,11 +45,11 @@ static void setFdNonblocking(int sockfd)
 {
     int flag = fcntl(sockfd, F_GETFL, 0);
     if (flag < 0) {
-        LOGER::PrintfLog("fcntl F_GETFL fail");
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "fcntl F_GETFL fail");
         return;
     }
     if (fcntl(sockfd, F_SETFL, flag | O_NONBLOCK) < 0) {
-        LOGER::PrintfLog("fcntl F_SETFL fail");
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "fcntl F_SETFL fail");
     }
 }
 
@@ -61,7 +61,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   timeout.tv_usec = mUsec;//微秒
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
   {
-    LOGER::PrintfLog((char*)"setsockopt failed:");
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "setsockopt failed:");
   }
 }
 
@@ -70,7 +70,7 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   int32_t iRet = 0;
 
   if((pTModule->mSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-      LOGER::PrintfLog((char*)"socket creat Failed");
+      LOGER::PrintfLog(BASE::S_APP_LOGER, "socket creat Failed");
       return -1;
   }
 
@@ -99,7 +99,7 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  LOGER::PrintfLog("%s leader endup", pTModule->mThreadName);
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "%s leader endup", pTModule->mThreadName);
   return 0;
 }
 
@@ -212,7 +212,7 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog((char*)"leader bind server ip failed, check network again !");
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "leader bind server ip failed, check network again !");
     moduleEndUp(pTModule);
     pTModule->mWorking = false;
 
@@ -232,7 +232,7 @@ void* threadEntry(void* pModule)
   uint16_t     lArmsStateCode;
   BASE::REC_UDP_STATE  recUdpLink = BASE::F_STATE_UNLINK;
 
-  LOGER::PrintfLog("%s leader running!", pTModule->mThreadName);
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "%s leader running!", pTModule->mThreadName);
   //running state
   while(pTModule->mWorking)
   {
@@ -252,21 +252,21 @@ void* threadEntry(void* pModule)
         //check if no client link
         if(size != sizeof(BASE::ARMS_R_MSG))
         {
-          LOGER::PrintfLog("%s, no client link", pTModule->mThreadName);
+          LOGER::PrintfLog(BASE::S_APP_LOGER, "%s, no client link", pTModule->mThreadName);
           break;
         }
 
         //link ok .check hard error
         if(checkHardError(pTModule->mRecMsg.mStateCode))
         {
-          LOGER::PrintfLog("hard error.statues code :%d", lArmsStateCode);
+          LOGER::PrintfLog(BASE::S_APP_LOGER, "hard error.statues code :%d", lArmsStateCode);
           //stop all modules
           pTModule->mState = BASE::M_STATE_STOP;
           //TODU
         }
 
         uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
-        LOGER::PrintfLog("motor state :%d", mMotorState);
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "motor state :%d", mMotorState);
         //check motor is power on
         if(mMotorState == 0) // motor 0000  all start,then change state
         {
@@ -287,7 +287,7 @@ void* threadEntry(void* pModule)
           }
           //motor power on
           int iRet =  motorCmd(pTModule, lMotors);
-          LOGER::PrintfLog((char*)"power on motors!");
+          LOGER::PrintfLog(BASE::S_APP_LOGER, "power on motors!");
         }
         break;
       }

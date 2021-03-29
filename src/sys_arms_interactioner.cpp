@@ -58,7 +58,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   timeout.tv_usec = mUsec;//微秒
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
   {
-    LOGER::PrintfLog("interaction set fd error\n");
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction set fd error\n");
   }
 }
 
@@ -68,7 +68,7 @@ static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule)
   int32_t iRet = 0;
 
   if((pTModule->mSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-      LOGER::PrintfLog("socket creat Failed");
+      LOGER::PrintfLog(BASE::S_APP_LOGER, "socket creat Failed");
       return -1;
   }
 
@@ -98,7 +98,7 @@ static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
     close(pTModule->mSocket);
     pTModule->mSocket = -1;
   }
-  LOGER::PrintfLog((char*)"interaction endup \n");
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction endup \n");
   return 0;
 }
 
@@ -113,7 +113,7 @@ static int readConfig(configItem * mParame, const int mPNum)
   {
     if((pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "w")) == NULL)
     {
-        LOGER::PrintfLog("--------------\n");
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "--------------\n");
         return  -1;
     }
 
@@ -195,7 +195,7 @@ void* threadEntry(void* pModule)
 
   if(initServer(pTModule) != 0)
   {
-    LOGER::PrintfLog((char*)"interaction  bind server ip failed, check network again !");
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction  bind server ip failed, check network again !");
     moduleEndUp(pTModule);
     pTModule->mWorking = false;
     return 0;
@@ -207,7 +207,7 @@ void* threadEntry(void* pModule)
   //running state
   pTModule->mState = BASE::M_STATE_RUN;
 
-  LOGER::PrintfLog((char*)"interaction running!");
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction running!");
   while(pTModule->mWorking)
   {
     //rec UDP************TODU
@@ -220,7 +220,7 @@ void* threadEntry(void* pModule)
     {
       case BASE::M_STATE_INIT:
       {
-        LOGER::PrintfLog((char*)"test log hear");
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "test log hear");
         break;
       }
       case BASE::M_STATE_RUN:

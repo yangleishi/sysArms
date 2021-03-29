@@ -104,6 +104,13 @@ const int PRI_SUPR = 50;
 const int PRI_LEAD = 40;
 const int PRI_LOGER = 30;
 
+//Define modules CPU affinity
+const int CPU_SUPR = 1;
+const int CPU_LEAD = 2;
+const int CPU_LOGER = 3;
+const int CPU_TENSION = 4;
+const int CPU_INTERACTIONER = 5;
+
 }  //namespace
 
 #endif // SYS_ARMS_CONF_HPP

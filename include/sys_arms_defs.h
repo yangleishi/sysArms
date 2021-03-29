@@ -50,6 +50,14 @@ typedef enum
   F_STATE_OVERTIME,
 } REC_UDP_STATE;
 
+//for log part/////////////
+//Define
+typedef enum
+{
+  S_APP_LOGER = 0,
+  S_ARMS_DATA,
+} LOG_SAVA_W;
+
 ////////////////////////////////////11 arms  UDP communication protocol   /////////////////////////////////////
 
 ///for udp msg ctrl part/////////////
@@ -98,8 +106,8 @@ const uint16_t   ST_MAN_MACHINE_KNOCK             = 0xFFFF;
 const uint16_t   ST_MAN_MACHINE_PRKNOCK           = 0xFFFE;
 
 const uint16_t   ST_MAN_MACHINE_REC_ERROR         = 0xFFF0;
-
 ///end of udp msg state part
+
 
 ////////////////////////////////////printf queue /////////////////////////////////////
 typedef struct
@@ -334,7 +342,7 @@ typedef struct
   pthread_mutex_t *mPrintQueueMutex;
 
   //cpu mask
-  uint8_t         mCpuAffinity;
+  int         mCpuAffinity;
 } THREAD_INFO_HEADER;
 
 //loger thread info
@@ -349,6 +357,7 @@ typedef struct
   pthread_cond_t   mPrintQueueReady;
   STR_QUEUE* mLogQueue;
 
+  STR_QUEUE* mArmsDataQueue;
   //cpu mask
   uint8_t         mCpuAffinity;
 } LOG_THREAD_INFO;

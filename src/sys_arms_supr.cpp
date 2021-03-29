@@ -38,8 +38,11 @@ BASE::TENSIONS_NEW_MSG mTensionsData[DEF_SYS_ARMS_NUMS];
 pthread_mutex_t mArmsWorkingMutex;
 
 pthread_mutex_t mPrintQueueMutex;
+//log queue all module will use this queue
 static BASE::STR_QUEUE *mLogQueue = NULL;
 
+//arms data log queue, only supr use this queue
+static BASE::STR_QUEUE *mArmsDataLogQueue = NULL;
 
 typedef struct _MODULEINFOS {
   const char* mName;
@@ -94,25 +97,25 @@ static void set_latency_target(void)
     errno = 0;
     err = stat("/dev/cpu_dma_latency", &s);
     if (err == -1) {
-        LOGER::PrintfLog("WARN: stat /dev/cpu_dma_latency failed");
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "WARN: stat /dev/cpu_dma_latency failed");
         return;
     }
 
     errno = 0;
     latency_target_fd = open("/dev/cpu_dma_latency", O_RDWR);
     if (latency_target_fd == -1) {
-        LOGER::PrintfLog("WARN: open /dev/cpu_dma_latency");
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "WARN: open /dev/cpu_dma_latency");
         return;
     }
 
     errno = 0;
     err = write(latency_target_fd, &latency_target_value, 4);
     if (err < 1) {
-        LOGER::PrintfLog("# error setting cpu_dma_latency to %d!", latency_target_value);
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "# error setting cpu_dma_latency to %d!", latency_target_value);
         close(latency_target_fd);
         return;
     }
-    LOGER::PrintfLog((char*)"# /dev/cpu_dma_latency set to %dus", latency_target_value);
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "# /dev/cpu_dma_latency set to %dus", latency_target_value);
 }
 
 static BASE::STR_QUEUE * qCreate(void)
@@ -173,7 +176,7 @@ static int32_t initSupr(void) {
   pthread_mutex_init(&mPrintQueueMutex, NULL);
   pthread_cond_init(&mlogsModule.mPrintQueueReady, NULL);
   mLogQueue = qCreate();
-
+  mArmsDataLogQueue = qCreate();
 
   //check arms working bits mutex
   pthread_mutex_init(&mArmsWorkingMutex, NULL);
@@ -184,7 +187,7 @@ static int32_t initSupr(void) {
   set_latency_target();
 
   //supr run in cpu0
-  BASE::hiSetCpuAffinity(1);
+  BASE::hiSetCpuAffinity(CONF::CPU_SUPR);
   return iRet;
 }
 
@@ -201,7 +204,8 @@ static int32_t startModules(void) {
   // logs thread
   mlogsModule.mWorking = true;
   mlogsModule.mLogQueue = mLogQueue;
-  mlogsModule.mCpuAffinity  = 0x03;
+  mlogsModule.mArmsDataQueue = mArmsDataLogQueue;
+  mlogsModule.mCpuAffinity  = CONF::CPU_LOGER;
   strcpy(mlogsModule.mThreadName, CONF::MN_LOG_NAME);
   gHiMInfo[CONF::ARMS_LOG_1_ID].mPid         = BASE::hiCreateThread(
                                                                      CONF::MN_LOG_NAME,
@@ -216,7 +220,7 @@ static int32_t startModules(void) {
   mManInteraction.mSerPort = CONF::MN_INTERACTION_SERVER_PORT;
   mManInteraction.mPrintQueueMutex = &mPrintQueueMutex;
   mManInteraction.mState = BASE::M_STATE_INIT;
-  mManInteraction.mCpuAffinity  = 0x04;
+  mManInteraction.mCpuAffinity  = CONF::CPU_INTERACTIONER;
   gHiMInfo[CONF::ARMS_INTERACTION_ID].mPid         =  BASE::hiCreateThread(
                                                                      CONF::MN_INTERACTION_NAME,
                                                                      INTERACTIONER::threadEntry,
@@ -238,7 +242,7 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mSerialNumber = qIdx-1;
     mArmsModule[qIdx-1].mNewRecMsg = false;
     mArmsModule[qIdx-1].mNowTensionMsg  = mTensionsData;
-    mArmsModule[qIdx-1].mCpuAffinity  = 0x02;
+    mArmsModule[qIdx-1].mCpuAffinity  = CONF::CPU_LEAD;
   }
 
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < CONF::ARMS_M_MAX_ID; qIdx++)
@@ -263,7 +267,7 @@ static int32_t startModules(void) {
     mArmsTension[qIdx].mSerPort = CONF::MN_TENSION_SERVER_PORT[qIdx];
     mArmsTension[qIdx].mNowTensionMsg  = mTensionsData;
     mArmsTension[qIdx].mPrintQueueMutex = &mPrintQueueMutex;
-    mArmsTension[qIdx].mCpuAffinity  = 0x05;
+    mArmsTension[qIdx].mCpuAffinity  = CONF::CPU_TENSION;
   }
 
 
@@ -422,7 +426,7 @@ static int32_t suprMainLoop(){
 
     if ((ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL))) {
         if (ret != EINTR)
-            LOGER::PrintfLog("clock_nanosleep failed. errno:");
+            LOGER::PrintfLog(BASE::S_APP_LOGER, "clock_nanosleep failed. errno:");
         continue;
      }
 
@@ -434,6 +438,9 @@ static int32_t suprMainLoop(){
     {
       handleArmsCrossing();
     }
+
+    //test save app arms data log
+    LOGER::PrintfLog(BASE::S_ARMS_DATA, "13.6 12 10.3 1111.9 23.8 90");
 
     //aotu change arms state,init conf run stop ...
     changeState();
@@ -481,6 +488,12 @@ static int32_t deInitSupr(void)
     mLogQueue = NULL;
   }
 
+  if(mArmsDataLogQueue != NULL)
+  {
+    free(mArmsDataLogQueue);
+    mArmsDataLogQueue = NULL;
+  }
+
   /* close the latency_target_fd if it's open */
   if (latency_target_fd >= 0)
       close(latency_target_fd);
@@ -507,13 +520,13 @@ int32_t dmsAppStartUp() {
 
   int32_t qIdx = CONF::ARMS_M_SUPR_ID;
   for (qIdx = CONF::ARMS_M_SUPR_ID+1; qIdx < CONF::ARMS_INTERACTION_MAX_ID; qIdx++) {
-    LOGER::PrintfLog((char*)"live until re-program qIdx=%d", qIdx);
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "live until re-program qIdx=%d", qIdx);
     pthread_join(gHiMInfo[qIdx].mPid, NULL);
   }
 
 
   //notice loger to endup
-  LOGER::PrintfLog((char*)"quit loger modules");
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "quit loger modules");
   mlogsModule.mWorking = false;
   pthread_cond_signal(&mlogsModule.mPrintQueueReady);
   pthread_join(gHiMInfo[MODULES_NUMS-1].mPid, NULL);
