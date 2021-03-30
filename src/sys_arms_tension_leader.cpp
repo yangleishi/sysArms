@@ -155,8 +155,7 @@ void* threadEntry(void* pModule)
   {
     //rec UDP
     int size = recvfrom(pTModule->mSocket , (char*)&(mRecMsg), sizeof(BASE::TENSIONS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-    //int size = 0;
-    //sleep(1);
+
     //TUDO*****
     if(size != sizeof(BASE::TENSIONS_R_MSG))
     {

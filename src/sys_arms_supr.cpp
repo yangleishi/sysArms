@@ -286,8 +286,6 @@ static int32_t startModules(void) {
 
 static void checkArmsWorking()
 {
-  int32_t iRet = 0;
-  static int32_t checkNums = 0;
   uint16_t mArmsWorkingBits = 0;
   for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
   {
@@ -312,16 +310,6 @@ static void checkArmsWorking()
     for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
       if(mArmsModule[qIdx].mWorking)
           mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
-    /*
-    checkNums++;
-    //if 10 cycle,some module is working then stop it
-    if(checkNums > 10)
-    {
-      for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
-        if(mArmsModule[qIdx].mWorking)
-          mArmsModule[qIdx].mWorking = false;
-    }
-    */
   }
 
 }
@@ -424,20 +412,19 @@ static int32_t suprMainLoop(){
     next.tv_nsec += interval.tv_nsec;
     tsnorm(&next);
 
-    if ((ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL))) {
-        if (ret != EINTR)
-            LOGER::PrintfLog(BASE::S_APP_LOGER, "clock_nanosleep failed. errno:");
-        continue;
-     }
+    if ((ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL)))
+    {
+      if (ret != EINTR)
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "clock_nanosleep failed. errno:");
+      continue;
+    }
 
     // if one arm error then set other stop, or man-interaction error set stop
     checkArmsWorking();
 
     // check arms  whether  crossed
     if(mSysState == BASE::M_STATE_RUN)
-    {
       handleArmsCrossing();
-    }
 
     //test save app arms data log
     LOGER::PrintfLog(BASE::S_ARMS_DATA, "13.6 12 10.3 1111.9 23.8 90");

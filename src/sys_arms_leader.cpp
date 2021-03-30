@@ -36,6 +36,11 @@ static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors,
 static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors);
 
 static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule, int devInt);
+
+//app running
+static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule);
+static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule);
+static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -60,9 +65,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   timeout.tv_sec = mSec;//秒
   timeout.tv_usec = mUsec;//微秒
   if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
-  {
     LOGER::PrintfLog(BASE::S_APP_LOGER, "setsockopt failed:");
-  }
 }
 
 static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
@@ -109,9 +112,7 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
 {
   int32_t iRet = 0;
   if(pMsg == NULL)
-  {
     return -1;
-  }
 
   struct timespec now;
 
@@ -161,28 +162,23 @@ static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors)
 static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg)
 {
   uint16_t iRet = 0;
-
   uint16_t motorBit = 1;
   //check all start
   for(int i=0; i<4; i++)
   {
     if(((mRecMsg.mMotors[i].mMotorStateCode>>1) % 2))
-    {
       iRet |= motorBit;
-    }
+
     motorBit << 1;
   }
-
   return iRet;
 }
 
 static int32_t checkHardError(uint16_t mStatusCode)
 {
   int32_t iRet = 0;
-
   if(mStatusCode%2)
     iRet = 1;
-
   return iRet;
 }
 
@@ -190,16 +186,113 @@ static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule, int devInt)
 {
   return  pTModule->mNowTensionMsg[devInt].iNewTensions ? pTModule->mNowTensionMsg[devInt].mTensions : -1.0;
 }
+
+static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  int32_t iRet = 0;
+  //link ok .check hard error
+  if(checkHardError(pTModule->mRecMsg.mStateCode))
+  {
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "hard error.statues code :%d", pTModule->mRecMsg.mStateCode);
+    //stop all modules
+    pTModule->mState = BASE::M_STATE_STOP;
+    //TODU
+    return -1;
+  }
+
+  BASE::MOTORS lMotors = {0};
+  uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "motor state :%d", mMotorState);
+  //check motor is power on
+  if(mMotorState == 0) // motor 0000  all start,then change state
+  {
+    //TUDO send 0 let arms wait
+    motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
+
+    if(pTModule->mAckState != BASE::ACK_STATE_INIT_OK)
+      pTModule->mAckState = BASE::ACK_STATE_INIT_OK;
+  }
+  else //some motors is stop
+  {
+    for (int i=0;i<4;i++)
+    {
+      //i motor is stop,then send cmd to start
+      lMotors.mMotorsCmd[i].mCmd = (mMotorState%2) ? BASE::CT_MOTOR_POWERON : BASE::CT_MOTOR_RUN;
+
+      mMotorState = (mMotorState>>1);
+    }
+    //if motor is stop then power on else motor running (0,0)wait
+    motorCmd(pTModule, lMotors);
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "power on motors!");
+  }
+  return iRet;
+}
+
+static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  int32_t iRet = 0;
+  //check hard error
+  if(checkHardError(pTModule->mRecMsg.mStateCode))
+  {
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "***conf state: hard error.statues code :%d", pTModule->mRecMsg.mStateCode);
+    //stop all modules
+    pTModule->mState = BASE::M_STATE_STOP;
+    //TODU
+    return -1;
+  }
+
+  //check motor if running
+  uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
+  if(mMotorState != 0) // some motor stop. then stop all modules
+  {
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "***conf state: have motor stop. motor state:%d", mMotorState);
+    //stop all modules
+    pTModule->mState = BASE::M_STATE_STOP;
+    return -2;
+  }
+  //TUDU send cmd to motor
+  BASE::MOTORS lMotors = {0};
+
+  //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
+  motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
+  return iRet;
+}
+
+static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  int32_t iRet = 0;
+  //check hard error
+  if(checkHardError(pTModule->mRecMsg.mStateCode))
+  {
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "***run state: hard error.statues code :%d", pTModule->mRecMsg.mStateCode);
+    //stop all modules
+    pTModule->mState = BASE::M_STATE_STOP;
+    //TODU
+    return -1;
+  }
+
+  //check motor if running
+  uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
+  if(mMotorState != 0) // some motor stop. then stop all modules
+  {
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "***run state: have motor stop. motor state:%d", mMotorState);
+    //stop all modules
+    pTModule->mState = BASE::M_STATE_STOP;
+    return -2;
+  }
+
+  //TUDO PID ctrl move to (x y z)
+  BASE::MOTORS lMotors = {0};
+  pTModule->mNewRecMsg = true;
+  float tensiosV = readTensionValue(pTModule,  pTModule->mRecMsg.mIdentifier);
+
+  motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
+  return  iRet;
+}
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-static inline int64_t calcdiff_ns(struct timespec t1, struct timespec t2)
-{
-    int64_t diff;
-    diff = NSEC_PER_SEC * (int64_t)((int) t1.tv_sec - (int) t2.tv_sec);
-    diff += ((int) t1.tv_nsec - (int) t2.tv_nsec);
-    return diff;
-}
+
 void* threadEntry(void* pModule)
 {
   BASE::ARMS_THREAD_INFO *pTModule =(BASE::ARMS_THREAD_INFO *) pModule;
@@ -215,22 +308,13 @@ void* threadEntry(void* pModule)
     LOGER::PrintfLog(BASE::S_APP_LOGER, "leader bind server ip failed, check network again !");
     moduleEndUp(pTModule);
     pTModule->mWorking = false;
-
     return 0;
   }
 
-  //struct timespec  pfTime1;
-
   socklen_t mun = sizeof(pTModule->mPeerAddr);
 
-  //clock_gettime(CLOCK_MONOTONIC, &pfTime1);
-
-  //uint32_t mArmsState = -1;
-  uint16_t mCrc = 0;
   //motors data
   BASE::MOTORS lMotors;
-  uint16_t     lArmsStateCode;
-  BASE::REC_UDP_STATE  recUdpLink = BASE::F_STATE_UNLINK;
 
   LOGER::PrintfLog(BASE::S_APP_LOGER, "%s leader running!", pTModule->mThreadName);
   //running state
@@ -238,74 +322,49 @@ void* threadEntry(void* pModule)
   {
     //lock,wait signal
     pthread_mutex_lock(&pTModule->mArmsMsgMutex);
-
     pthread_cond_wait(&pTModule->mArmsMsgReady, &pTModule->mArmsMsgMutex);
-
     pthread_mutex_unlock(&pTModule->mArmsMsgMutex);
 
-    //
+    //rec msg
+    int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
+
     switch (pTModule->mState)
     {
       case BASE::M_STATE_INIT:
       {
-        int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-        //check if no client link
+        //check if have client link
         if(size != sizeof(BASE::ARMS_R_MSG))
         {
-          LOGER::PrintfLog(BASE::S_APP_LOGER, "%s, no client link", pTModule->mThreadName);
+          LOGER::PrintfLog(BASE::S_APP_LOGER, "init state: %s, no client link", pTModule->mThreadName);
           break;
         }
-
-        //link ok .check hard error
-        if(checkHardError(pTModule->mRecMsg.mStateCode))
-        {
-          LOGER::PrintfLog(BASE::S_APP_LOGER, "hard error.statues code :%d", lArmsStateCode);
-          //stop all modules
-          pTModule->mState = BASE::M_STATE_STOP;
-          //TODU
-        }
-
-        uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
-        LOGER::PrintfLog(BASE::S_APP_LOGER, "motor state :%d", mMotorState);
-        //check motor is power on
-        if(mMotorState == 0) // motor 0000  all start,then change state
-        {
-          //TUDO send 0 let arms wait
-          motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
-
-          if(pTModule->mAckState != BASE::ACK_STATE_INIT_OK)
-            pTModule->mAckState = BASE::ACK_STATE_INIT_OK;
-        }
-        else //some motors is stop
-        {
-          for (int i=0;i<4;i++)
-          {
-            //i motor is stop,then send cmd to start
-            lMotors.mMotorsCmd[i].mCmd = (mMotorState%2) ? BASE::CT_MOTOR_POWERON : BASE::CT_MOTOR_RUN;
-
-            mMotorState = (mMotorState>>1);
-          }
-          //motor power on
-          int iRet =  motorCmd(pTModule, lMotors);
-          LOGER::PrintfLog(BASE::S_APP_LOGER, "power on motors!");
-        }
+        initFire(pTModule);
         break;
       }
       case BASE::M_STATE_CONF:
       {
-        //TUDO*******
-        //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
-        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
+        //TUDO**** rec error msg then stop app
+        if(size != sizeof(BASE::ARMS_R_MSG))
+        {
+          LOGER::PrintfLog(BASE::S_APP_LOGER, "conf state: %s, client overtime or lost link. stop app", pTModule->mThreadName);
+          //stop all modules
+          pTModule->mState = BASE::M_STATE_STOP;
+          break;
+        }
+        confFire(pTModule);
         break;
       }
       case BASE::M_STATE_RUN:
       {
-        //TUDO*******
-        //TUDO PID ctrl move to (x y z)
-        pTModule->mNewRecMsg = true;
-        float tensiosV = readTensionValue(pTModule,  pTModule->mRecMsg.mIdentifier);
-
-        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
+        //TUDO**** rec error msg then stop app
+        if(size != sizeof(BASE::ARMS_R_MSG))
+        {
+          LOGER::PrintfLog(BASE::S_APP_LOGER, "run state: %s, client overtime or lost link. stop app", pTModule->mThreadName);
+          //stop all modules
+          pTModule->mState = BASE::M_STATE_STOP;
+          break;
+        }
+        runFire(pTModule);
         break;
       }
       case BASE::M_STATE_STOP:

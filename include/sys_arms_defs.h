@@ -42,14 +42,6 @@ typedef enum
   ACK_STATE_INIT_OK,
 } ACK_STATE;
 
-//DEFINE THREAD recfrom state
-typedef enum
-{
-  F_STATE_UNLINK = 0,
-  F_STATE_LINK,
-  F_STATE_OVERTIME,
-} REC_UDP_STATE;
-
 //for log part/////////////
 //Define
 typedef enum
