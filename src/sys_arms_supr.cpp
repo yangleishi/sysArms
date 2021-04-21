@@ -26,13 +26,13 @@
 namespace SUPR {
 
 //thread parame
-BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_ARMS_NUMS];
+BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_USE_ARMS_NUMS];
 BASE::TENSIONS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
 BASE::LOG_THREAD_INFO  mlogsModule;
 BASE::INTERACTION_THREAD_INFO mManInteraction;
 
 //tensions value
-BASE::TENSIONS_NEW_MSG mTensionsData[DEF_SYS_ARMS_NUMS];
+BASE::TENSIONS_NEW_MSG mTensionsData[DEF_SYS_USE_ARMS_NUMS];
 
 //if arms is working then the bit is 0.else 1
 pthread_mutex_t mArmsWorkingMutex;
@@ -71,7 +71,7 @@ static void changeState();
 
 static int32_t deInitSupr(void);
 ////////////////////////////////////////////////////////////////////////////////
-///////int32_ternal int32_terface //////////////////////////////////////////////////////
+///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
 static int latency_target_fd = -1;
@@ -146,8 +146,6 @@ static inline int64_t calcdiff_ns(struct timespec t1, struct timespec t2)
     return diff;
 }
 
-
-
 static int32_t prepareEnv(void) {
   int32_t iRet = 0;
   printf("ARMS APP STARTING\n");
@@ -166,7 +164,7 @@ static int32_t initSupr(void) {
   //need handler error case
   int32_t iRet = 0;
   /* 互斥 con初始化. */
-  for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+  for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
   {
     pthread_mutex_init(&mArmsModule[qIdx].mArmsMsgMutex, NULL);
     pthread_cond_init(&mArmsModule[qIdx].mArmsMsgReady, NULL);
@@ -194,7 +192,6 @@ static int32_t initSupr(void) {
 static void changeSuprThreadInfo(void) {
   BASE::hiSetThreadsched(pthread_self(), CONF::PRI_SUPR);
 }
-
 
 
 static int32_t startModules(void) {
@@ -229,7 +226,7 @@ static int32_t startModules(void) {
 
   usleep(100000);
   // arms threads
-  for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < CONF::ARMS_M_MAX_ID; qIdx++)
+  for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < DEF_SYS_USE_ARMS_NUMS+1; qIdx++)
   {
     mArmsModule[qIdx-1].mWorking = true;
     mArmsModule[qIdx-1].mLogQueue = mLogQueue;
@@ -243,19 +240,12 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mNewRecMsg = false;
     mArmsModule[qIdx-1].mNowTensionMsg  = mTensionsData;
     mArmsModule[qIdx-1].mCpuAffinity  = CONF::CPU_LEAD;
-  }
-
-  for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < CONF::ARMS_M_MAX_ID; qIdx++)
-  {
     gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_NAME[qIdx],
                                                  LEADER::threadEntry,
                                                  CONF::PRI_LEAD,
                                                  &(mArmsModule[qIdx-1]));
-    usleep(100000);
-    //LOGER::PrintfLog("pid:%u\t", gHiMInfo[qIdx].mPid);
+    usleep(10000);
   }
-
-
 
 // tension threads
   for (qIdx = 0; qIdx < CONF::ARMS_T_MAX_ID-CONF::ARMS_T_1_ID; qIdx++)
@@ -287,16 +277,16 @@ static int32_t startModules(void) {
 static void checkArmsWorking()
 {
   uint16_t mArmsWorkingBits = 0;
-  for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
   {
     if(!mArmsModule[i].mWorking)
-        mArmsWorkingBits |= ((0x0001)<<(i));
+        mArmsWorkingBits++;
   }
   //no arm stop
   if(mArmsWorkingBits == 0)
     return;
 
-  if(mArmsWorkingBits == 0x07ff) //all stop
+  if(mArmsWorkingBits == DEF_SYS_USE_ARMS_NUMS) //all stop
   {
     suprWorking = 0;
     //stop tensions
@@ -307,10 +297,36 @@ static void checkArmsWorking()
   }
   else //some stop
   {
-    for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+    for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
       if(mArmsModule[qIdx].mWorking)
           mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
   }
+  /*
+  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
+  {
+    if(!mArmsModule[i].mWorking)
+        mArmsWorkingBits |= ((0x0001)<<(i));
+  }
+  //no arm stop
+  if(mArmsWorkingBits == 0)
+    return;
+
+  if(mArmsWorkingBits == 0x3) //all stop
+  {
+    suprWorking = 0;
+    //stop tensions
+    for (int qIdx = 0; qIdx < DEF_SYS_TENSIONLEADER_NUMS; qIdx++)
+      mArmsTension[qIdx].mWorking = false;
+    //stop interaction
+    mManInteraction.mWorking = false;
+  }
+  else //some stop
+  {
+    for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
+      if(mArmsModule[qIdx].mWorking)
+          mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
+  }
+  */
 
 }
 
@@ -321,7 +337,7 @@ static void handleArmsCrossing()
   //TODU*******  calculation and check arms are crossing
 
   //set all arms rec msg false.until nest msg come
-  for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
     mArmsModule[i].mNewRecMsg = false;
 }
 
@@ -333,13 +349,13 @@ static void changeState()
     {
       int iRet = 0;
       //check is conf
-      for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+      for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
         if(mArmsModule[qIdx].mAckState == BASE::ACK_STATE_INIT_OK)
           iRet++;
       //change all modules CONF state
-      if(iRet == DEF_SYS_ARMS_NUMS)
+      if(iRet == DEF_SYS_USE_ARMS_NUMS)
       {
-        for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+        for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
           mArmsModule[qIdx].mState = BASE::M_STATE_CONF;
         mSysState = BASE::M_STATE_CONF;
       }
@@ -350,7 +366,7 @@ static void changeState()
       //check is change to run or stop
       if(mManInteraction.mIsStataChange && (mManInteraction.mNewState == BASE::M_STATE_RUN || mManInteraction.mNewState == BASE::M_STATE_STOP))
       {
-        for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+        for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
           mArmsModule[qIdx].mState = mManInteraction.mNewState;
 
         mSysState = mManInteraction.mNewState;
@@ -363,7 +379,7 @@ static void changeState()
       //check is change to stop
       if(mManInteraction.mIsStataChange && mManInteraction.mNewState == BASE::M_STATE_STOP)
       {
-        for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+        for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
           mArmsModule[qIdx].mState = mManInteraction.mNewState;
 
         mSysState = mManInteraction.mNewState;
@@ -376,7 +392,7 @@ static void changeState()
       //check is change to conf or run
       if(mManInteraction.mIsStataChange && (mManInteraction.mNewState == BASE::M_STATE_CONF || mManInteraction.mNewState == BASE::M_STATE_RUN))
       {
-        for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+        for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
           mArmsModule[qIdx].mState = mManInteraction.mNewState;
 
         mSysState = mManInteraction.mNewState;
@@ -432,7 +448,7 @@ static int32_t suprMainLoop(){
     //aotu change arms state,init conf run stop ...
     changeState();
 
-    for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+    for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
     {
       pthread_cond_signal(&mArmsModule[qIdx].mArmsMsgReady);
     }
@@ -446,7 +462,7 @@ static int32_t suprMainLoop(){
 static void signalHandle(int mSignal)
 {
   mSysState = BASE::M_STATE_STOP;
-  for (int32_t qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+  for (int32_t qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
   {
 
     mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
@@ -458,7 +474,7 @@ static int32_t deInitSupr(void)
 {
   int32_t iRet = 0;
 
-  for (int qIdx = 0; qIdx < DEF_SYS_ARMS_NUMS; qIdx++)
+  for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
   {
     pthread_mutex_destroy(&mArmsModule[qIdx].mArmsMsgMutex);
     pthread_cond_destroy(&mArmsModule[qIdx].mArmsMsgReady);
@@ -488,7 +504,7 @@ static int32_t deInitSupr(void)
   return iRet;
 }
 ////////////////////////////////////////////////////////////////////////////////
-///////external int32_terface //////////////////////////////////////////////////////
+///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 void clientTest()
 {
@@ -506,11 +522,20 @@ int32_t dmsAppStartUp() {
   }
 
   int32_t qIdx = CONF::ARMS_M_SUPR_ID;
-  for (qIdx = CONF::ARMS_M_SUPR_ID+1; qIdx < CONF::ARMS_INTERACTION_MAX_ID; qIdx++) {
+  for (qIdx = CONF::ARMS_M_1_ID; qIdx < DEF_SYS_USE_ARMS_NUMS+CONF::ARMS_M_1_ID; qIdx++) {
     LOGER::PrintfLog(BASE::S_APP_LOGER, "live until re-program qIdx=%d", qIdx);
     pthread_join(gHiMInfo[qIdx].mPid, NULL);
   }
 
+  for (qIdx = CONF::ARMS_T_1_ID; qIdx < DEF_SYS_TENSIONLEADER_NUMS+CONF::ARMS_T_1_ID; qIdx++) {
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "live until re-program qIdx=%d", qIdx);
+    pthread_join(gHiMInfo[qIdx].mPid, NULL);
+  }
+
+  for (qIdx = CONF::ARMS_INTERACTION_ID; qIdx < CONF::ARMS_INTERACTION_MAX_ID; qIdx++) {
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "live until re-program qIdx=%d", qIdx);
+    pthread_join(gHiMInfo[qIdx].mPid, NULL);
+  }
 
   //notice loger to endup
   LOGER::PrintfLog(BASE::S_APP_LOGER, "quit loger modules");

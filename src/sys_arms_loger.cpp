@@ -94,13 +94,13 @@ static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule)
   pthread_mutex_init(&mPrintQueueMutex, NULL);
 
   //open log
-  pPrintFile = fopen("sysArms.log", "a+");
+  pPrintFile = fopen(CONF::MN_LOGER_PRINTF_FILE, "a+");
   if(pPrintFile == NULL)
   {
     return  -1;
   }
   //open data log
-  pArmsDataFile = fopen("sysArms.data", "a+");
+  pArmsDataFile = fopen(CONF::MN_ARMS_DATA_FILE, "a+");
   if(pArmsDataFile == NULL)
   {
     return  -1;

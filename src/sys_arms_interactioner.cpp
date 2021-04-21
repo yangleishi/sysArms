@@ -46,7 +46,7 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 static void printLoger(const char* sLog);
 
 //config file
-static int readConfig(configItem  * mParame, const int mPNum);
+static int readConfig(configItem  * mParame);
 static int writeConfig(configItem * mParame, const int mPNum);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
@@ -103,7 +103,7 @@ static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
 }
 
 
-static int readConfig(configItem * mParame, const int mPNum)
+static int readConfig(configItem * mParame)
 {
   int iRet = 0;
   configItem * mTParame = mParame;
@@ -113,28 +113,26 @@ static int readConfig(configItem * mParame, const int mPNum)
   {
     if((pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "w")) == NULL)
     {
-        LOGER::PrintfLog(BASE::S_APP_LOGER, "--------------\n");
-        return  -1;
+      LOGER::PrintfLog(BASE::S_APP_LOGER, "--------------\n");
+      return  -1;
     }
 
-    for (int i=0; i<mPNum; i++)
+    for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
     {
-      memset((char*)mTParame, 0, sizeof(configItem));
-      fprintf(pFile, "%f %f %f %f %f %f\n",
-                      mTParame->Encoder_X_Calibration,
-                      mTParame->Encoder_Y_Calibration,
-                      mTParame->Encoder_Z_Calibration,
-                      mTParame->Encoder_W_Calibration,
-                      mTParame->Angle_Sensor_Calibration,
-                      mTParame->Tension_Max_Value);
+      fprintf(pFile, "%f %f %f %f %f %f\n", CONF::IN_OFFSET_X[i], CONF::IN_OFFSET_Y[i], CONF::IN_OFFSET_Z[i], CONF::IN_OFFSET_W[i], CONF::IN_OFFSET_ANGLE[i], CONF::IN_MAX_TENSION[i]);
+      mTParame->Encoder_X_Calibration = CONF::IN_OFFSET_X[i];
+      mTParame->Encoder_Y_Calibration = CONF::IN_OFFSET_Y[i];
+      mTParame->Encoder_Z_Calibration = CONF::IN_OFFSET_Z[i];
+      mTParame->Encoder_W_Calibration = CONF::IN_OFFSET_W[i];
+      mTParame->Angle_Sensor_Calibration = CONF::IN_OFFSET_ANGLE[i];
+      mTParame->Tension_Max_Value = CONF::IN_MAX_TENSION[i];
       mTParame++;
     }
-
     fclose(pFile);
     return 0;
   }
 
-  for (int i=0; i<mPNum; i++)
+  for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
   {
 
     fscanf(pFile, "%f %f %f %f %f %f\n",
@@ -191,7 +189,8 @@ void* threadEntry(void* pModule)
 
   mPrintQueueMutex = pTModule->mPrintQueueMutex;
 
-  readConfig(mParames, DEF_SYS_ARMS_NUMS);
+  //read conf
+  readConfig(mParames);
 
   if(initServer(pTModule) != 0)
   {
@@ -203,24 +202,21 @@ void* threadEntry(void* pModule)
 
   socklen_t mun = sizeof(pTModule->mPeerAddr);
 
-  BASE::PRINT_STR mLog;
   //running state
-  pTModule->mState = BASE::M_STATE_RUN;
+  pTModule->mState = BASE::M_STATE_INIT;
 
   LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction running!");
   while(pTModule->mWorking)
   {
     //rec UDP************TODU
-    //int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-    //TUDO*****
-    //lArmsStateCode = (size != sizeof(BASE::ARMS_R_MSG)) ? BASE::ST_SYS_REC_ERROR : pTModule->mRecMsg.mSysState;
-    sleep(1);
+    int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_INTERACTION_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
     //TODU
-    switch (pTModule->mState)
+    switch (pTModule->mRecMsg.mCtrl)
     {
       case BASE::M_STATE_INIT:
       {
-        LOGER::PrintfLog(BASE::S_APP_LOGER, "test log hear");
+        //LOGER::PrintfLog(BASE::S_APP_LOGER, "test log hear");
+        printf("interaction test\n");
         break;
       }
       case BASE::M_STATE_RUN:

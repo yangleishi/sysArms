@@ -218,7 +218,6 @@ static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule)
     {
       //i motor is stop,then send cmd to start
       lMotors.mMotorsCmd[i].mCmd = (mMotorState%2) ? BASE::CT_MOTOR_POWERON : BASE::CT_MOTOR_RUN;
-
       mMotorState = (mMotorState>>1);
     }
     //if motor is stop then power on else motor running (0,0)wait

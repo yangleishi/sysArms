@@ -47,6 +47,7 @@ typedef enum {
  */
 #define DEF_SYS_ARMS_NUMS 11
 #define DEF_SYS_TENSIONLEADER_NUMS 2
+#define DEF_SYS_USE_ARMS_NUMS 1
 
 const char MN_NAME[][15] = {"MN_SUPR", "MN_SERVER1", "MN_SERVER2",
                             "MN_SERVER3", "MN_SERVER4", "MN_SERVER5",
@@ -85,7 +86,10 @@ const char MN_INTERACTION_SERVER_IP[] = "192.168.1.100";
 const int  MN_INTERACTION_SERVER_PORT = 10001;
 
 
-const char MN_INTERACTION_CONF_FILE[] = "armsConf.conf";
+const char MN_INTERACTION_CONF_FILE[] = ".armsConf.conf";
+const char MN_LOGER_PRINTF_FILE[] = "sysArms.log";
+const char MN_ARMS_DATA_FILE[] = "sysArms.data";
+
 //*********////////// UDP timeout///////////////////
 //m us,arms ctrl
 const int SERVER_UDP_TIMEOUT_S = 0;
@@ -110,6 +114,17 @@ const int CPU_LEAD = 2;
 const int CPU_LOGER = 3;
 const int CPU_TENSION = 4;
 const int CPU_INTERACTIONER = 5;
+
+//*********////////// interaction conf///////////////////
+const float  IN_MAX_TENSION[DEF_SYS_USE_ARMS_NUMS] = { 100 };
+const float  IN_OFFSET_X[DEF_SYS_USE_ARMS_NUMS] = { 0 };
+const float  IN_OFFSET_Y[DEF_SYS_USE_ARMS_NUMS] = { 0 };
+const float  IN_OFFSET_Z[DEF_SYS_USE_ARMS_NUMS] = { 0 };
+const float  IN_OFFSET_W[DEF_SYS_USE_ARMS_NUMS] = { 0 };
+const float  IN_OFFSET_ANGLE[DEF_SYS_USE_ARMS_NUMS] = { 0 };
+
+
+
 
 }  //namespace
 

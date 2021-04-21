@@ -76,7 +76,7 @@ const uint16_t   ST_SYS_REC_ERROR         = 0xFFF0;
 
 ///end of udp msg state part
 
-////////////////////////////////////man interaction  UDP communication protocol   /////////////////////////////////////
+////////////////////////////////////man  UDP communication protocol   /////////////////////////////////////
 
 ///for udp msg ctrl part/////////////
 //Define the ctrl
@@ -98,6 +98,27 @@ const uint16_t   ST_MAN_MACHINE_KNOCK             = 0xFFFF;
 const uint16_t   ST_MAN_MACHINE_PRKNOCK           = 0xFFFE;
 
 const uint16_t   ST_MAN_MACHINE_REC_ERROR         = 0xFFF0;
+///end of udp msg state part
+
+
+///for interaction msg state part/////////////
+const uint16_t   IN_BASE          = 0x0000;  //first msg upper to interactioner
+//Define the ctrl upper =>> interactioner
+const uint16_t   IN_KNOCK_DOOR          = IN_BASE + 0;  //first msg upper to interactioner
+const uint16_t   IN_CONF_CONFIGURE      = IN_BASE + 1;
+const uint16_t   IN_CONF_READ_PARAMS    = IN_BASE + 2;
+
+const uint16_t   IN_CONF_MOVE           = IN_BASE + 3;  // 0-15 modules ,16-31 X Y Z W motors move
+
+
+
+//Define the states upper <<= interactioner
+const uint16_t   IN_KNOCK_DOOR_OK          = IN_BASE + 100;  //first msg interactioner to upper
+const uint16_t   IN_KNOCK_DOOR_FILED       = IN_BASE + 101;  //first msg interactioner to upper
+
+const uint16_t   IN_CONF_CONFIGURE_OK      = IN_BASE + 102;
+
+
 ///end of udp msg state part
 
 
@@ -192,6 +213,7 @@ typedef struct
   float      mPosition;
   float      mSpeed;
   float      mAcceleration;
+  uint64_t   mEncoder;
 } MOTOR_REC_DATAS;
 
 // UDP, rec data structure. 11 arms
@@ -312,8 +334,8 @@ typedef struct
 //TODU
 typedef struct
 {
-  ARMS_R_MSG mArmsMsgs[DEF_SYS_ARMS_NUMS];
-  M_STATE  mArmsState[DEF_SYS_ARMS_NUMS];
+  ARMS_R_MSG mArmsMsgs[DEF_SYS_USE_ARMS_NUMS];
+  M_STATE  mArmsState[DEF_SYS_USE_ARMS_NUMS];
 } ARMS_MSGS;
 
 ////////////////////////////////////
@@ -382,6 +404,10 @@ typedef struct: public THREAD_INFO_HEADER
 {
   bool      mIsStataChange;
   M_STATE   mNewState;
+
+  ARMS_INTERACTION_MSG  mRecMsg;
+  ARMS_INTERACTION_MSG  mSendMsg;
+
 }INTERACTION_THREAD_INFO;
 
 }  //namespace
