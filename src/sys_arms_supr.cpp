@@ -25,6 +25,15 @@
 
 namespace SUPR {
 
+//struct for modules
+typedef struct _MODULEINFOS
+{
+  const char* mName;
+  void *(*mEntry)(void* mModule);
+  int32_t mPri;
+  pthread_t mPid;
+} MODULEINFOS;
+
 //thread parame
 BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_USE_ARMS_NUMS];
 BASE::TENSIONS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
@@ -44,13 +53,6 @@ static BASE::STR_QUEUE *mLogQueue = NULL;
 //arms data log queue, only supr use this queue
 static BASE::STR_QUEUE *mArmsDataLogQueue = NULL;
 
-typedef struct _MODULEINFOS {
-  const char* mName;
-  void *(*mEntry)(void* mModule);
-  int32_t mPri;
-  pthread_t mPid;
-
-} MODULEINFOS;
 
 //arms,tensions,logs threads and supr
 MODULEINFOS gHiMInfo[MODULES_NUMS];
@@ -150,7 +152,7 @@ static int32_t prepareEnv(void) {
   int32_t iRet = 0;
   printf("ARMS APP STARTING\n");
 
-  ///TODO:: msg and msg q need refactor after first version.
+  //TODO:: msg and msg q need refactor after first version.
 
   initSupr();
 
@@ -508,8 +510,7 @@ static int32_t deInitSupr(void)
 ////////////////////////////////////////////////////////////////////////////////
 void clientTest()
 {
-
-
+//TUDO
 }
 
 int32_t dmsAppStartUp() {

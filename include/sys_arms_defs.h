@@ -304,8 +304,54 @@ typedef struct
 } TENSIONS_NEW_MSG;
 
 ///////////////////////////////////
-// interaction data structure
-#define INTERACTION_DATA_LENGTH 1024
+/******************************************interaction data structure***************************************/
+//////////////////////interaction控制指令//////////////
+const uint16_t  CMD_BASE = 0;
+const uint16_t  CMD_LINK = CMD_BASE + 1;
+const uint16_t  CMD_UNLINK = CMD_BASE + 2;
+const uint16_t  CMD_SAVE_CONF = CMD_BASE + 3;
+const uint16_t  CMD_READ_CONF = CMD_BASE + 4;
+const uint16_t  CMD_HAND_MOVE_START = CMD_BASE + 5;
+const uint16_t  CMD_HAND_MOVE_STOP = CMD_BASE + 6;
+const uint16_t  CMD_ALL_MOVE_START = CMD_BASE + 7;
+const uint16_t  CMD_ALL_MOVE_STOP = CMD_BASE + 8;
+const uint16_t  CMD_ALL_PULL_START = CMD_BASE + 9;
+const uint16_t  CMD_ALL_PULL_STOP = CMD_BASE + 10;
+
+const uint16_t  CMD_RUN_START = CMD_BASE + 11;
+const uint16_t  CMD_RUN_STOP = CMD_BASE + 12;
+const uint16_t  CMD_RUN_STOP_E = CMD_BASE + 13;
+//下发配置数据发送的最大数据char
+#define MSG_DOWN_DATA_MAX  300
+//上传数据发送的最大数据char
+#define MSG_UP_DATA_MAX  1000
+/////////////////////////////////////////////////rec interactions/////////////////////////////////////
+typedef struct
+{
+    //*******************16位CtrlWord******************************************/
+    uint16_t   CmdIdentify;
+    //*******************数据段**********************/
+    //下发的数据
+    char Datas[MSG_DOWN_DATA_MAX];
+    //*******************序列码、随机码、保留位**********************/
+    uint16_t CRC;
+}MArmsDownData;
+
+  /////////////////////////////////////////////////////上传数据////////////////////////////////////////
+typedef struct
+{
+    //*******************16位stateWord******************************************/
+    uint16_t   StatusWord;
+    //*******************16位stateCode******************************************/
+    uint16_t   StatusCode;
+    //*******************数据段**********************/
+    //下发的数据
+    char Datas[MSG_UP_DATA_MAX];
+    //*******************序列码、随机码、保留位**********************/
+    uint16_t CRC;
+}MArmsUpData;
+
+/*
 typedef struct
 {
   //frame start 0x88
@@ -329,6 +375,7 @@ typedef struct
   //mCrcCode++
   uint16_t mCrcCode;
 } ARMS_INTERACTION_MSG;
+*/
 
 /////////////////////////////////TODU//////////////////////////////////////////////
 //TODU
@@ -405,8 +452,8 @@ typedef struct: public THREAD_INFO_HEADER
   bool      mIsStataChange;
   M_STATE   mNewState;
 
-  ARMS_INTERACTION_MSG  mRecMsg;
-  ARMS_INTERACTION_MSG  mSendMsg;
+  MArmsDownData  mRecMsg;
+  MArmsUpData    mSendMsg;
 
 }INTERACTION_THREAD_INFO;
 

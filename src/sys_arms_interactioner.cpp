@@ -209,22 +209,77 @@ void* threadEntry(void* pModule)
   while(pTModule->mWorking)
   {
     //rec UDP************TODU
-    int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_INTERACTION_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
+    int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::MArmsDownData), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
     //TODU
-    switch (pTModule->mRecMsg.mCtrl)
+    switch (pTModule->mRecMsg.CmdIdentify)
     {
-      case BASE::M_STATE_INIT:
+      case BASE::CMD_LINK:
       {
         //LOGER::PrintfLog(BASE::S_APP_LOGER, "test log hear");
-        printf("interaction test\n");
+        printf("interaction CMD link\n");
+        BASE::MArmsUpData mSendMsg;
+        mSendMsg.StatusCode = 1;
+        sendto(pTModule->mSocket, (char*)&mSendMsg, sizeof(BASE::MArmsUpData), 0, (sockaddr*)&pTModule->mPeerAddr, mun);
         break;
       }
-      case BASE::M_STATE_RUN:
+      case BASE::CMD_UNLINK:
       {
+        printf("interaction CMD unlink\n");
         break;
       }
-      case BASE::M_STATE_STOP:
+      case BASE::CMD_SAVE_CONF:
       {
+        printf("interaction CMD Sava conf\n");
+        break;
+      }
+      case BASE::CMD_READ_CONF:
+      {
+        printf("interaction CMD read conf\n");
+        break;
+      }
+      case BASE::CMD_HAND_MOVE_START:
+      {
+        printf("interaction CMD move start\n");
+        break;
+      }
+      case BASE::CMD_HAND_MOVE_STOP:
+      {
+        printf("interaction CMD move stop\n");
+        break;
+      }
+      case BASE::CMD_ALL_MOVE_START:
+      {
+        printf("interaction CMD all move start\n");
+        break;
+      }
+      case BASE::CMD_ALL_MOVE_STOP:
+      {
+        printf("interaction CMD all move stop\n");
+        break;
+      }
+      case BASE::CMD_ALL_PULL_START:
+      {
+        printf("interaction CMD all pull start\n");
+        break;
+      }
+      case BASE::CMD_ALL_PULL_STOP:
+      {
+        printf("interaction CMD all pull stop\n");
+        break;
+      }
+      case BASE::CMD_RUN_START:
+      {
+        printf("interaction CMD run start\n");
+        break;
+      }
+      case BASE::CMD_RUN_STOP:
+      {
+        printf("interaction CMD run  stop\n");
+        break;
+      }
+      case BASE::CMD_RUN_STOP_E:
+      {
+        printf("interaction CMD run  stop E\n");
         break;
       }
       default:
@@ -233,6 +288,7 @@ void* threadEntry(void* pModule)
       }
     }
 
+    memset((char*)&(pTModule->mRecMsg), 0, sizeof(BASE::MArmsDownData));
   }
 
   moduleEndUp(pTModule);
