@@ -321,8 +321,20 @@ const uint16_t  CMD_ALL_PULL_STOP = CMD_BASE + 10;
 const uint16_t  CMD_RUN_START = CMD_BASE + 11;
 const uint16_t  CMD_RUN_STOP = CMD_BASE + 12;
 const uint16_t  CMD_RUN_STOP_E = CMD_BASE + 13;
+
+
+//////////////////////interaction ACK指令//////////////
+const uint16_t  CMD_ACK_BASE = 0;
+const uint16_t  CMD_ACK_LINK_OK = CMD_ACK_BASE + 1;
+const uint16_t  CMD_ACK_LINK_FAILD = CMD_ACK_BASE + 2;
+const uint16_t  CMD_ACK_UNLINK_OK = CMD_ACK_BASE + 3;
+
+const uint16_t  CMD_ACK_SAVECONF_OK = CMD_ACK_BASE + 4;
+const uint16_t  CMD_ACK_SAVECONF_FAILD = CMD_ACK_BASE + 5;
+const uint16_t  CMD_ACK_READCONF_OK = CMD_ACK_BASE + 6;
+
 //下发配置数据发送的最大数据char
-#define MSG_DOWN_DATA_MAX  300
+#define MSG_DOWN_DATA_MAX  400
 //上传数据发送的最大数据char
 #define MSG_UP_DATA_MAX  1000
 /////////////////////////////////////////////////rec interactions/////////////////////////////////////
@@ -351,33 +363,40 @@ typedef struct
     uint16_t CRC;
 }MArmsUpData;
 
-/*
-typedef struct
-{
-  //frame start 0x88
-  uint8_t   mIdentifier;
+//配置界面中单元的重量、编码器真值设置
+typedef struct{
+  float mConfSaveWeight;
+  float mConfSaveEncoderX;
+  float mConfSaveEncoderY;
+  float mConfSaveEncoderZ;
+  float mConfSaveEncoderP;
+  float mConfSaveEncoderT;
+  int   mIsValid;
+} SaveConfData;
 
-  // control cmd
-  uint8_t   mCtrl;
+//配置界面中单元的重量、编码器真值设置
+typedef struct{
+  float mConfSaveWeight;
+  float mConfSaveEncoderX;
+  float mConfSaveEncoderY;
+  float mConfSaveEncoderZ;
+  float mConfSaveEncoderP;
+  float mConfSaveEncoderT;
 
-  // system state
-  uint16_t  mSysState;
+  float mConfReadPull;
+  float mConfReadEncoderX;
+  float mConfReadEncoderY;
+  float mConfReadEncoderZ;
+  float mConfReadEncoderP;
+  float mConfReadEncoderT;
+  float mConfReadSikoX;
+  float mConfReadSikoY;
+  float mConfReadLevelX;
+  float mConfReadLevelY;
+  int   mIsValid;
+} ReadConfData;
 
-  // frame time
-  SYS_TIME  mSysTime;
-
-  // data length,now fixed length
-  uint16_t  mDataLength;
-
-  //fixed length data
-  char mDatas[INTERACTION_DATA_LENGTH];
-
-  //mCrcCode++
-  uint16_t mCrcCode;
-} ARMS_INTERACTION_MSG;
-*/
-
-/////////////////////////////////TODU//////////////////////////////////////////////
+/////////////////////////////////sys //////////////////////////////////////////////
 //TODU
 typedef struct
 {

@@ -47,7 +47,7 @@ typedef enum {
  */
 #define DEF_SYS_ARMS_NUMS 11
 #define DEF_SYS_TENSIONLEADER_NUMS 2
-#define DEF_SYS_USE_ARMS_NUMS 1
+#define DEF_SYS_USE_ARMS_NUMS 11
 
 const char MN_NAME[][15] = {"MN_SUPR", "MN_SERVER1", "MN_SERVER2",
                             "MN_SERVER3", "MN_SERVER4", "MN_SERVER5",

@@ -19,21 +19,8 @@
 #include "sys_arms_interactioner.hpp"
 #include "sys_arms_daemon.hpp"
 
-//sys config parame
-struct configItem
-{
-  //4 ecoder
-  float Encoder_X_Calibration;
-  float Encoder_Y_Calibration;
-  float Encoder_Z_Calibration;
-  float Encoder_W_Calibration;
 
-  float Angle_Sensor_Calibration;
-
-  float Tension_Max_Value;
-};
-
-static configItem mParames[DEF_SYS_ARMS_NUMS] = {0};
+static BASE::ReadConfData mParames[DEF_SYS_ARMS_NUMS] = {0};
 
 namespace INTERACTIONER {
 
@@ -44,10 +31,11 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 
 static void printLoger(const char* sLog);
+static void sendMsgToUpper(BASE::INTERACTION_THREAD_INFO *pTModule, const uint16_t StatusWord, const uint16_t StatusCode, const char* pData, int dataSize);
 
 //config file
-static int readConfig(configItem  * mParame);
-static int writeConfig(configItem * mParame, const int mPNum);
+static int readConfig(BASE::ReadConfData  * mParame);
+static int writeConfig(BASE::ReadConfData * mParame, const int mPNum);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -103,10 +91,10 @@ static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
 }
 
 
-static int readConfig(configItem * mParame)
+static int readConfig(BASE::ReadConfData * mParame)
 {
   int iRet = 0;
-  configItem * mTParame = mParame;
+  BASE::ReadConfData * mTParame = mParame;
   FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "r");
 
   if(pFile == NULL)
@@ -119,30 +107,34 @@ static int readConfig(configItem * mParame)
 
     for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
     {
-      fprintf(pFile, "%f %f %f %f %f %f\n", CONF::IN_OFFSET_X[i], CONF::IN_OFFSET_Y[i], CONF::IN_OFFSET_Z[i], CONF::IN_OFFSET_W[i], CONF::IN_OFFSET_ANGLE[i], CONF::IN_MAX_TENSION[i]);
-      mTParame->Encoder_X_Calibration = CONF::IN_OFFSET_X[i];
-      mTParame->Encoder_Y_Calibration = CONF::IN_OFFSET_Y[i];
-      mTParame->Encoder_Z_Calibration = CONF::IN_OFFSET_Z[i];
-      mTParame->Encoder_W_Calibration = CONF::IN_OFFSET_W[i];
-      mTParame->Angle_Sensor_Calibration = CONF::IN_OFFSET_ANGLE[i];
-      mTParame->Tension_Max_Value = CONF::IN_MAX_TENSION[i];
+      fprintf(pFile, "%f %f %f %f %f %f\n", CONF::IN_MAX_TENSION[i], CONF::IN_OFFSET_X[i], CONF::IN_OFFSET_Y[i], CONF::IN_OFFSET_Z[i], CONF::IN_OFFSET_W[i], CONF::IN_OFFSET_ANGLE[i]);
+      mTParame->mConfSaveWeight = CONF::IN_MAX_TENSION[i];
+      mTParame->mConfSaveEncoderX = CONF::IN_OFFSET_X[i];
+      mTParame->mConfSaveEncoderY = CONF::IN_OFFSET_Y[i];
+      mTParame->mConfSaveEncoderZ = CONF::IN_OFFSET_Z[i];
+      mTParame->mConfSaveEncoderP = CONF::IN_OFFSET_W[i];
+      mTParame->mConfSaveEncoderT = CONF::IN_OFFSET_ANGLE[i];
       mTParame++;
     }
     fclose(pFile);
     return 0;
   }
 
+  memset((char*)mTParame, 0, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
   for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
   {
 
     fscanf(pFile, "%f %f %f %f %f %f\n",
-                    &(mTParame->Encoder_X_Calibration),
-                    &(mTParame->Encoder_Y_Calibration),
-                    &(mTParame->Encoder_Z_Calibration),
-                    &(mTParame->Encoder_W_Calibration),
-                    &(mTParame->Angle_Sensor_Calibration),
-                    &(mTParame->Tension_Max_Value));
+                    &(mTParame->mConfSaveWeight),
+                    &(mTParame->mConfSaveEncoderX),
+                    &(mTParame->mConfSaveEncoderY),
+                    &(mTParame->mConfSaveEncoderZ),
+                    &(mTParame->mConfSaveEncoderP),
+                    &(mTParame->mConfSaveEncoderT)
+                    );
 
+    //printf("%f %f %f %f %f %f\n",mTParame->mConfSaveWeight, mTParame->mConfSaveEncoderX, mTParame->mConfSaveEncoderY,
+    //                             mTParame->mConfSaveEncoderZ, mTParame->mConfSaveEncoderP, mTParame->mConfSaveEncoderT);
     mTParame++;
   }
 
@@ -150,30 +142,55 @@ static int readConfig(configItem * mParame)
   return iRet;
 }
 
-static int writeConfig(configItem * mParame, const int mPNum)
+static int writeConfig(BASE::SaveConfData * mParame, const int mPNum)
 {
   int iRet = 0;
-  FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "w");
+  FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "rw+");
 
   if(pFile == NULL)
     return -1;
 
-  configItem * mTParame = mParame;
+  BASE::ReadConfData tParames[DEF_SYS_ARMS_NUMS] = {0};
+  readConfig(tParames);
+  for (int i=0; i<DEF_SYS_ARMS_NUMS;i++)
+  {
+      if(mParame[i].mIsValid == 1)
+      {
+          tParames[i].mConfSaveWeight = mParame[i].mConfSaveWeight;
+          tParames[i].mConfSaveEncoderX = mParame[i].mConfSaveEncoderX;
+          tParames[i].mConfSaveEncoderY = mParame[i].mConfSaveEncoderY;
+          tParames[i].mConfSaveEncoderZ = mParame[i].mConfSaveEncoderZ;
+          tParames[i].mConfSaveEncoderP = mParame[i].mConfSaveEncoderP;
+          tParames[i].mConfSaveEncoderT = mParame[i].mConfSaveEncoderT;
+      }
+  }
+
   for (int i=0; i<mPNum; i++)
   {
     fprintf(pFile, "%f %f %f %f %f %f\n",
-                   mTParame->Encoder_X_Calibration,
-                   mTParame->Encoder_Y_Calibration,
-                   mTParame->Encoder_Z_Calibration,
-                   mTParame->Encoder_W_Calibration,
-                   mTParame->Angle_Sensor_Calibration,
-                   mTParame->Tension_Max_Value);
-
-    mTParame++;
+                   tParames[i].mConfSaveWeight,
+                   tParames[i].mConfSaveEncoderX,
+                   tParames[i].mConfSaveEncoderY,
+                   tParames[i].mConfSaveEncoderZ,
+                   tParames[i].mConfSaveEncoderP,
+                   tParames[i].mConfSaveEncoderT);
+    printf("%f %f %f %f %f %f  %d\n",tParames[i].mConfSaveWeight, tParames[i].mConfSaveEncoderX, tParames[i].mConfSaveEncoderY,
+                                     tParames[i].mConfSaveEncoderZ, tParames[i].mConfSaveEncoderP, tParames[i].mConfSaveEncoderT, tParames[i].mIsValid);
   }
 
   fclose(pFile);
   return iRet;
+}
+
+static void sendMsgToUpper(BASE::INTERACTION_THREAD_INFO *pTModule, const uint16_t StatusWord, const uint16_t StatusCode, const char* pData, int dataSize)
+{
+    BASE::MArmsUpData mSendMsg;
+    mSendMsg.StatusWord = StatusWord;
+    mSendMsg.StatusCode = StatusCode;
+    if(dataSize > 0 && dataSize < MSG_UP_DATA_MAX)
+        memcpy(mSendMsg.Datas, pData, dataSize);
+
+    sendto(pTModule->mSocket, (char*)&mSendMsg, sizeof(BASE::MArmsUpData), 0, (sockaddr*)&pTModule->mPeerAddr, sizeof(pTModule->mPeerAddr));
 }
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
@@ -217,24 +234,31 @@ void* threadEntry(void* pModule)
       {
         //LOGER::PrintfLog(BASE::S_APP_LOGER, "test log hear");
         printf("interaction CMD link\n");
-        BASE::MArmsUpData mSendMsg;
-        mSendMsg.StatusCode = 1;
-        sendto(pTModule->mSocket, (char*)&mSendMsg, sizeof(BASE::MArmsUpData), 0, (sockaddr*)&pTModule->mPeerAddr, mun);
+        //TUDO  send msg to arms concl
+        memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
+        readConfig(mParames);
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_LINK_OK, 0, (char*)mParames, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
         break;
       }
       case BASE::CMD_UNLINK:
       {
         printf("interaction CMD unlink\n");
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_UNLINK_OK, 0, 0, 0);
         break;
       }
       case BASE::CMD_SAVE_CONF:
       {
+        //BASE::SaveConfData *mSavaConf = (BASE::SaveConfData *)pTModule->mRecMsg.Datas;
+        writeConfig((BASE::SaveConfData *)pTModule->mRecMsg.Datas, DEF_SYS_ARMS_NUMS);
         printf("interaction CMD Sava conf\n");
         break;
       }
       case BASE::CMD_READ_CONF:
       {
+        memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
+        readConfig(mParames);
         printf("interaction CMD read conf\n");
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_READCONF_OK, 0, (char*)mParames, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
         break;
       }
       case BASE::CMD_HAND_MOVE_START:
