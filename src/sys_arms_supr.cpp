@@ -38,13 +38,19 @@ typedef struct _MODULEINFOS
 BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_USE_ARMS_NUMS];
 BASE::TENSIONS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
 BASE::LOG_THREAD_INFO  mlogsModule;
+
+
 BASE::INTERACTION_THREAD_INFO mManInteraction;
+//interaction to supr
+BASE::InteractionDataToSupr mInteractionDatas;
+BASE::ReadLiftSigalNowData  mReadLiftNowDatas[DEF_SYS_USE_ARMS_NUMS];
+pthread_mutex_t mArmsNowDatasMutex;
 
 //tensions value
-BASE::TENSIONS_NEW_MSG mTensionsData[DEF_SYS_USE_ARMS_NUMS];
+BASE::TENSIONS_NOW_DATA mTensionsData[DEF_SYS_USE_ARMS_NUMS];
 
 //if arms is working then the bit is 0.else 1
-pthread_mutex_t mArmsWorkingMutex;
+//pthread_mutex_t mArmsWorkingMutex;
 
 pthread_mutex_t mPrintQueueMutex;
 //log queue all module will use this queue
@@ -69,6 +75,7 @@ static void signalHandle(int mSignal);
 static BASE::STR_QUEUE * qCreate(void);
 static void checkArmsWorking();
 static void handleArmsCrossing();
+static void handleInteractionCmd();
 static void changeState();
 
 static int32_t deInitSupr(void);
@@ -170,6 +177,8 @@ static int32_t initSupr(void) {
   {
     pthread_mutex_init(&mArmsModule[qIdx].mArmsMsgMutex, NULL);
     pthread_cond_init(&mArmsModule[qIdx].mArmsMsgReady, NULL);
+
+    pthread_mutex_init(&mArmsModule[qIdx].mMotorMutex, NULL);
   }
 
   //queue cond
@@ -178,8 +187,13 @@ static int32_t initSupr(void) {
   mLogQueue = qCreate();
   mArmsDataLogQueue = qCreate();
 
-  //check arms working bits mutex
-  pthread_mutex_init(&mArmsWorkingMutex, NULL);
+  //interaction
+  memset((char*)&mInteractionDatas, 0, sizeof(mInteractionDatas));
+  pthread_mutex_init(&mInteractionDatas.mInteractionRecMutex, NULL);
+  pthread_mutex_init(&mInteractionDatas.mInteractionSendMutex, NULL);
+
+  //arms now datas mutex,this datas to interaction
+  pthread_mutex_init(&mArmsNowDatasMutex, NULL);
 
   signal(SIGINT, signalHandle);
 
@@ -212,6 +226,7 @@ static int32_t startModules(void) {
                                                                      CONF::PRI_LOGER,
                                                                      &mlogsModule);
   // interactioner thread
+  memset((char*)mReadLiftNowDatas, 0, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_TENSIONLEADER_NUMS);
   mManInteraction.mWorking = true;
   mManInteraction.mLogQueue = mLogQueue;
   strcpy(mManInteraction.mThreadName, CONF::MN_INTERACTION_NAME);
@@ -220,7 +235,10 @@ static int32_t startModules(void) {
   mManInteraction.mPrintQueueMutex = &mPrintQueueMutex;
   mManInteraction.mState = BASE::M_STATE_INIT;
   mManInteraction.mCpuAffinity  = CONF::CPU_INTERACTIONER;
-  gHiMInfo[CONF::ARMS_INTERACTION_ID].mPid         =  BASE::hiCreateThread(
+  mManInteraction.mInterToSuprDatas = &mInteractionDatas;
+  mManInteraction.mSuprDatasToInterasction.mReadLiftNowDatas  = mReadLiftNowDatas;
+  mManInteraction.mSuprDatasToInterasction.mReadLiftNowDatasMutex = &mArmsNowDatasMutex;
+  gHiMInfo[CONF::ARMS_INTERACTION_ID].mPid    =  BASE::hiCreateThread(
                                                                      CONF::MN_INTERACTION_NAME,
                                                                      INTERACTIONER::threadEntry,
                                                                      CONF::PRI_LEAD,
@@ -240,8 +258,9 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mPrintQueueMutex = &mPrintQueueMutex;
     mArmsModule[qIdx-1].mSerialNumber = qIdx-1;
     mArmsModule[qIdx-1].mNewRecMsg = false;
-    mArmsModule[qIdx-1].mNowTensionMsg  = mTensionsData;
+    mArmsModule[qIdx-1].mNowTension  = &mTensionsData[qIdx-1];
     mArmsModule[qIdx-1].mCpuAffinity  = CONF::CPU_LEAD;
+    mArmsModule[qIdx-1].mIsNowMotorCmd = 0;
     gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_NAME[qIdx],
                                                  LEADER::threadEntry,
                                                  CONF::PRI_LEAD,
@@ -257,7 +276,7 @@ static int32_t startModules(void) {
     strcpy(mArmsTension[qIdx].mThreadName, CONF::MN_TENSION_NAME[qIdx]);
     memcpy(mArmsTension[qIdx].mIpV4Str, CONF::MN_TENSION_SERVER_IP[qIdx], sizeof(CONF::MN_TENSION_SERVER_IP[qIdx]));
     mArmsTension[qIdx].mSerPort = CONF::MN_TENSION_SERVER_PORT[qIdx];
-    mArmsTension[qIdx].mNowTensionMsg  = mTensionsData;
+    mArmsTension[qIdx].mNowTension  = mTensionsData;
     mArmsTension[qIdx].mPrintQueueMutex = &mPrintQueueMutex;
     mArmsTension[qIdx].mCpuAffinity  = CONF::CPU_TENSION;
   }
@@ -302,6 +321,7 @@ static void checkArmsWorking()
     for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
       if(mArmsModule[qIdx].mWorking)
           mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
+    printf("this stop\n");
   }
   /*
   for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
@@ -343,6 +363,106 @@ static void handleArmsCrossing()
     mArmsModule[i].mNewRecMsg = false;
 }
 
+static void handleInteractionCmd()
+{
+  //new cmd from interaction
+    if(mInteractionDatas.mIsNewRec > 0)
+    {
+        BASE::MArmsDownData  mmRecMsg;
+        int buttonType = 0;
+        pthread_mutex_lock(&mInteractionDatas.mInteractionRecMutex);
+        memcpy((char*)&mmRecMsg, (char*)&mInteractionDatas.mRecMsg, sizeof(mmRecMsg));
+        buttonType = mInteractionDatas.mIsNewRec;
+        mInteractionDatas.mIsNewRec = 0;
+        pthread_mutex_unlock(&mInteractionDatas.mInteractionRecMutex);
+
+        printf("mIsNowMotorCmd: %d\n", buttonType);
+
+        switch (buttonType)
+        {
+          case BASE::CMD_HAND_MOVE_START : case BASE::CMD_HAND_MOVE_STOP:
+          {
+            BASE::MoveLiftSigalData *mMove = (BASE::MoveLiftSigalData *)mmRecMsg.Datas;
+            //copy move to leaders
+            if(mMove->mMudoleNum >=  DEF_SYS_USE_ARMS_NUMS)
+            {
+                int maxNum = DEF_SYS_USE_ARMS_NUMS;
+                LOGER::PrintfLog(BASE::S_APP_LOGER, "conf, move module num:%d >= max arms num:%d", mMove->mMudoleNum, maxNum);
+            }
+            else
+            {
+                pthread_mutex_lock(&mArmsModule[mMove->mMudoleNum].mMotorMutex);
+                mArmsModule[mMove->mMudoleNum].mIsNowMotorCmd = buttonType;
+                memcpy((char*)&mArmsModule[mMove->mMudoleNum].mMoveData, mmRecMsg.Datas, sizeof(BASE::MoveLiftSigalData));
+                pthread_mutex_unlock(&mArmsModule[mMove->mMudoleNum].mMotorMutex);
+            }
+            break;
+          }
+          case BASE::CMD_ALL_MOVE_START:
+          {
+            BASE::MoveLiftAllData *mAllMove = (BASE::MoveLiftAllData *)mmRecMsg.Datas;
+            //copy move to leaders
+            for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+            {
+                if(mAllMove[i].mIsValid)
+                {
+                    pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+                    mArmsModule[i].mIsNowMotorCmd = buttonType;
+                    memcpy((char*)&mArmsModule[i].mAllMoveData, (char*)&mAllMove[i], sizeof(BASE::MoveLiftAllData));
+                    pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
+                }
+            }
+            break;
+          }
+          case BASE::CMD_ALL_MOVE_STOP:
+          case BASE::CMD_ALL_PULL_STOP:
+          {
+            //copy move to leaders
+            for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
+            {
+                pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+                mArmsModule[i].mIsNowMotorCmd = buttonType;
+                pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
+            }
+            break;
+          }
+          case BASE::CMD_ALL_PULL_START:
+          {
+            BASE::PullLiftAllData *mAllPull = (BASE::PullLiftAllData *)mmRecMsg.Datas;
+            //copy move to leaders
+            for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+            {
+                if(mAllPull[i].mIsValid)
+                {
+                    pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+                    mArmsModule[i].mIsNowMotorCmd = buttonType;
+                    memcpy((char*)&mArmsModule[i].mAllPullData, (char*)&mAllPull[i], sizeof(BASE::PullLiftAllData));
+                    pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
+                }
+            }
+            break;
+          }
+          case BASE::CMD_RUN_START:
+          case BASE::CMD_RUN_STOP:
+          {
+            //copy move to leaders
+            for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
+            {
+              pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+              mArmsModule[i].mIsNowMotorCmd = buttonType;
+              pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
+            }
+            break;
+          }
+          default:
+          {
+            break;
+          }
+        }
+    }
+
+}
+
 static void changeState()
 {
   switch (mSysState)
@@ -373,6 +493,7 @@ static void changeState()
 
         mSysState = mManInteraction.mNewState;
         mManInteraction.mIsStataChange = false;
+        LOGER::PrintfLog(BASE::S_APP_LOGER,"++++++++++++++++++++therr");
       }
       break;
     }
@@ -413,7 +534,7 @@ static void changeState()
 static int32_t suprMainLoop(){
   //TODU
   struct timespec now, next, interval;
-  unsigned int nDelay = 10000;        /* usec */
+  unsigned int nDelay = 1000;        /* usec */
 
   int  ret;
 
@@ -440,6 +561,13 @@ static int32_t suprMainLoop(){
     // if one arm error then set other stop, or man-interaction error set stop
     checkArmsWorking();
 
+    //aotu change arms state,init conf run stop ...
+    changeState();
+
+    // check arms  whether  conf move control
+    if(mSysState == BASE::M_STATE_CONF || mSysState == BASE::M_STATE_RUN)
+      handleInteractionCmd();
+
     // check arms  whether  crossed
     if(mSysState == BASE::M_STATE_RUN)
       handleArmsCrossing();
@@ -447,14 +575,21 @@ static int32_t suprMainLoop(){
     //test save app arms data log
     LOGER::PrintfLog(BASE::S_ARMS_DATA, "13.6 12 10.3 1111.9 23.8 90");
 
-    //aotu change arms state,init conf run stop ...
-    changeState();
 
+    //copy now datas
+    pthread_mutex_lock(&mArmsNowDatasMutex);
+    for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
+    {
+      //copy conf lift datas
+      memcpy((char*)&mReadLiftNowDatas[qIdx], (char*)&mArmsModule[qIdx].mNowData, sizeof(BASE::ReadLiftSigalNowData));
+    }
+    pthread_mutex_unlock(&mArmsNowDatasMutex);
+
+    //notice leader cycle
     for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
     {
       pthread_cond_signal(&mArmsModule[qIdx].mArmsMsgReady);
     }
-
     //notice loger cycle write log
     pthread_cond_signal(&mlogsModule.mPrintQueueReady);
 
@@ -466,7 +601,6 @@ static void signalHandle(int mSignal)
   mSysState = BASE::M_STATE_STOP;
   for (int32_t qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
   {
-
     mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
   }
   printf("oops! stop!!!\n");
@@ -485,7 +619,7 @@ static int32_t deInitSupr(void)
 
   pthread_cond_destroy(&mlogsModule.mPrintQueueReady);
   pthread_mutex_destroy(&mPrintQueueMutex);
-  pthread_mutex_destroy(&mArmsWorkingMutex);
+  pthread_mutex_destroy(&mArmsNowDatasMutex);
 
   if(mLogQueue != NULL)
   {

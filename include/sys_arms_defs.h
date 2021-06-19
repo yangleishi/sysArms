@@ -301,7 +301,7 @@ typedef struct
 {
   float   mTensions;
   bool    iNewTensions;
-} TENSIONS_NEW_MSG;
+} TENSIONS_NOW_DATA;
 
 ///////////////////////////////////
 /******************************************interaction data structure***************************************/
@@ -322,6 +322,19 @@ const uint16_t  CMD_RUN_START = CMD_BASE + 11;
 const uint16_t  CMD_RUN_STOP = CMD_BASE + 12;
 const uint16_t  CMD_RUN_STOP_E = CMD_BASE + 13;
 
+//cycly read datas
+const uint16_t  CMD_CYC_READ_LIFT_DATAS = CMD_BASE + 14;
+const uint16_t  CMD_CYC_READ_RUNNING_DATAS = CMD_BASE + 15;
+const uint16_t  CMD_CYC_READ_SHOWDE_DATAS = CMD_BASE + 16;
+
+//leader run state
+const uint16_t  ST_HAND_MOVE_RUNNING = CMD_BASE + 17;
+const uint16_t  ST_ALL_MOVE_RUNNING = CMD_BASE + 18;
+const uint16_t  ST_ALL_PULL_RUNNING = CMD_BASE + 19;
+const uint16_t  ST_LIFT_STOPED = CMD_BASE + 20;
+
+const uint16_t  ST_ALL_RUN_RUNNING = CMD_BASE + 21;
+const uint16_t  ST_RUN_STOPED = CMD_BASE + 22;
 
 //////////////////////interaction ACK指令//////////////
 const uint16_t  CMD_ACK_BASE = 0;
@@ -332,6 +345,14 @@ const uint16_t  CMD_ACK_UNLINK_OK = CMD_ACK_BASE + 3;
 const uint16_t  CMD_ACK_SAVECONF_OK = CMD_ACK_BASE + 4;
 const uint16_t  CMD_ACK_SAVECONF_FAILD = CMD_ACK_BASE + 5;
 const uint16_t  CMD_ACK_READCONF_OK = CMD_ACK_BASE + 6;
+
+const uint16_t  CMD_ACK_READ_LIFT_DATAS = CMD_BASE + 7;
+const uint16_t  CMD_ACK_READ_RUNNING_DATAS = CMD_BASE + 8;
+const uint16_t  CMD_ACK_READ_SHOWDE_DATAS = CMD_BASE + 9;
+
+//////////////////////CONF 模式下，interaction发送给Supr同步命令类型。便于supr分类上位机发送的按钮CMD//////////////
+const uint16_t  CMD_TYPE_BASE = 0;
+
 
 //下发配置数据发送的最大数据char
 #define MSG_DOWN_DATA_MAX  400
@@ -349,7 +370,7 @@ typedef struct
     uint16_t CRC;
 }MArmsDownData;
 
-  /////////////////////////////////////////////////////上传数据////////////////////////////////////////
+///////////////////////上传数据////////////////////////
 typedef struct
 {
     //*******************16位stateWord******************************************/
@@ -395,6 +416,59 @@ typedef struct{
   float mConfReadLevelY;
   int   mIsValid;
 } ReadConfData;
+
+//起吊界面中，上位机发送的手动控制数据命令
+typedef struct{
+  int   mMudoleNum;
+  float mHandXMove;
+  float mHandYMove;
+  float mHandZMove;
+  float mHandWMove;
+  float mMoveRelatAbs;
+} MoveLiftSigalData;
+
+//起重界面中整体控制移动,可控制多个单元X Y Z方向移动
+typedef struct{
+  int     mMudoleNum;
+  float   mHandXMove;
+  float   mHandYMove;
+  float   mHandZMove;
+  float   mHandMoveSpeed;
+  bool    mIsValid;
+} MoveLiftAllData;
+
+//起吊界面中，控制器接收arms运行数据
+typedef struct{
+  int     mMudoleNum;
+  float   mHandXMoveNow;
+  float   mHandYMoveNow;
+  float   mHandZMoveNow;
+  float   mHandWMoveNow;
+} ReadLiftSigalNowData;
+
+//起重界面中整体pull移动,可控制多个单元上拉
+typedef struct{
+  int     mMudoleNum;
+  float   mHandPull;
+  int    mIsValid;
+} PullLiftAllData;
+
+//interaction cmd datas to supr
+typedef struct{
+  int            mIsNewRec;
+  int            mIsNewSend;
+  MArmsDownData  mRecMsg;
+  MArmsUpData    mSendMsg;
+
+  pthread_mutex_t mInteractionRecMutex;
+  pthread_mutex_t mInteractionSendMutex;
+} InteractionDataToSupr;
+
+//interaction. supr to interaction
+typedef struct{
+  BASE::ReadLiftSigalNowData* mReadLiftNowDatas;
+  pthread_mutex_t*            mReadLiftNowDatasMutex;
+} SuprDataToInteraction;
 
 /////////////////////////////////sys //////////////////////////////////////////////
 //TODU
@@ -446,22 +520,33 @@ typedef struct
 //11 arms thread info
 typedef struct: public THREAD_INFO_HEADER
 {
-  ACK_STATE            mAckState;
+  ACK_STATE       mAckState;
 
-  bool                 mNewRecMsg;
-  ARMS_R_MSG           mRecMsg;
-  ARMS_S_MSG           mSendMsg;
+  bool            mNewRecMsg;
+  ARMS_R_MSG      mRecMsg;
+  ARMS_S_MSG      mSendMsg;
   pthread_mutex_t mArmsMsgMutex;
   pthread_cond_t  mArmsMsgReady;
   int             mSerialNumber;  //0 1 2.... not dev int
 
-  TENSIONS_NEW_MSG   *mNowTensionMsg;
+  //rec motor cmd
+  int                mIsNowMotorCmd;
+  MoveLiftSigalData  mMoveData;
+  MoveLiftAllData    mAllMoveData;
+  PullLiftAllData    mAllPullData;
+
+  pthread_mutex_t   mMotorMutex;
+
+  //send motor data
+  ReadLiftSigalNowData  mNowData;
+
+  TENSIONS_NOW_DATA   *mNowTension;
 } ARMS_THREAD_INFO;
 
 //tensions thread info
 typedef struct: public THREAD_INFO_HEADER
 {
-  TENSIONS_NEW_MSG   *mNowTensionMsg;
+  TENSIONS_NOW_DATA   *mNowTension;
 } TENSIONS_THREAD_INFO;
 
 
@@ -473,6 +558,9 @@ typedef struct: public THREAD_INFO_HEADER
 
   MArmsDownData  mRecMsg;
   MArmsUpData    mSendMsg;
+
+  InteractionDataToSupr *mInterToSuprDatas;
+  SuprDataToInteraction  mSuprDatasToInterasction;
 
 }INTERACTION_THREAD_INFO;
 

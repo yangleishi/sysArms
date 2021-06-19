@@ -183,8 +183,8 @@ void* threadEntry(void* pModule)
     }
 
     //copy tensins data to supr
-    pTModule->mNowTensionMsg[mRecMsg.mIdentifier].mTensions = mRecMsg.mTensions;
-    pTModule->mNowTensionMsg[mRecMsg.mIdentifier].iNewTensions = true;
+    pTModule->mNowTension[mRecMsg.mIdentifier].mTensions = mRecMsg.mTensions;
+    pTModule->mNowTension[mRecMsg.mIdentifier].iNewTensions = true;
 
   }
 

@@ -27,15 +27,23 @@ namespace INTERACTIONER {
 static char printfC[100] = {0};
 pthread_mutex_t *mPrintQueueMutex = NULL;
 
+
 static int initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 
 static void printLoger(const char* sLog);
 static void sendMsgToUpper(BASE::INTERACTION_THREAD_INFO *pTModule, const uint16_t StatusWord, const uint16_t StatusCode, const char* pData, int dataSize);
 
+static void changeState(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmd);
+
 //config file
 static int readConfig(BASE::ReadConfData  * mParame);
 static int writeConfig(BASE::ReadConfData * mParame, const int mPNum);
+//config handle move
+static int sendMsgToSupr(BASE::INTERACTION_THREAD_INFO *pTModule, int pNewRecType);
+
+static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule);
+
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -142,7 +150,7 @@ static int readConfig(BASE::ReadConfData * mParame)
   return iRet;
 }
 
-static int writeConfig(BASE::SaveConfData * mParame, const int mPNum)
+static int writeConfig(BASE::SaveConfData * sParame, const int mPNum)
 {
   int iRet = 0;
   FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "rw+");
@@ -150,32 +158,31 @@ static int writeConfig(BASE::SaveConfData * mParame, const int mPNum)
   if(pFile == NULL)
     return -1;
 
-  BASE::ReadConfData tParames[DEF_SYS_ARMS_NUMS] = {0};
-  readConfig(tParames);
+  readConfig(mParames);
   for (int i=0; i<DEF_SYS_ARMS_NUMS;i++)
   {
-      if(mParame[i].mIsValid == 1)
+      if(sParame[i].mIsValid == 1)
       {
-          tParames[i].mConfSaveWeight = mParame[i].mConfSaveWeight;
-          tParames[i].mConfSaveEncoderX = mParame[i].mConfSaveEncoderX;
-          tParames[i].mConfSaveEncoderY = mParame[i].mConfSaveEncoderY;
-          tParames[i].mConfSaveEncoderZ = mParame[i].mConfSaveEncoderZ;
-          tParames[i].mConfSaveEncoderP = mParame[i].mConfSaveEncoderP;
-          tParames[i].mConfSaveEncoderT = mParame[i].mConfSaveEncoderT;
+          mParames[i].mConfSaveWeight = sParame[i].mConfSaveWeight;
+          mParames[i].mConfSaveEncoderX = sParame[i].mConfSaveEncoderX;
+          mParames[i].mConfSaveEncoderY = sParame[i].mConfSaveEncoderY;
+          mParames[i].mConfSaveEncoderZ = sParame[i].mConfSaveEncoderZ;
+          mParames[i].mConfSaveEncoderP = sParame[i].mConfSaveEncoderP;
+          mParames[i].mConfSaveEncoderT = sParame[i].mConfSaveEncoderT;
       }
   }
 
   for (int i=0; i<mPNum; i++)
   {
     fprintf(pFile, "%f %f %f %f %f %f\n",
-                   tParames[i].mConfSaveWeight,
-                   tParames[i].mConfSaveEncoderX,
-                   tParames[i].mConfSaveEncoderY,
-                   tParames[i].mConfSaveEncoderZ,
-                   tParames[i].mConfSaveEncoderP,
-                   tParames[i].mConfSaveEncoderT);
-    printf("%f %f %f %f %f %f  %d\n",tParames[i].mConfSaveWeight, tParames[i].mConfSaveEncoderX, tParames[i].mConfSaveEncoderY,
-                                     tParames[i].mConfSaveEncoderZ, tParames[i].mConfSaveEncoderP, tParames[i].mConfSaveEncoderT, tParames[i].mIsValid);
+                   mParames[i].mConfSaveWeight,
+                   mParames[i].mConfSaveEncoderX,
+                   mParames[i].mConfSaveEncoderY,
+                   mParames[i].mConfSaveEncoderZ,
+                   mParames[i].mConfSaveEncoderP,
+                   mParames[i].mConfSaveEncoderT);
+    printf("%f %f %f %f %f %f  %d\n",mParames[i].mConfSaveWeight, mParames[i].mConfSaveEncoderX, mParames[i].mConfSaveEncoderY,
+                                     mParames[i].mConfSaveEncoderZ, mParames[i].mConfSaveEncoderP, mParames[i].mConfSaveEncoderT, mParames[i].mIsValid);
   }
 
   fclose(pFile);
@@ -191,6 +198,67 @@ static void sendMsgToUpper(BASE::INTERACTION_THREAD_INFO *pTModule, const uint16
         memcpy(mSendMsg.Datas, pData, dataSize);
 
     sendto(pTModule->mSocket, (char*)&mSendMsg, sizeof(BASE::MArmsUpData), 0, (sockaddr*)&pTModule->mPeerAddr, sizeof(pTModule->mPeerAddr));
+}
+
+static void changeState(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmd)
+{
+    /*
+    switch (pTModule->mState)
+    {
+      case BASE::M_STATE_INIT:
+      {
+        if((mCmd == BASE::CMD_SAVE_CONF) || (mCmd == BASE::CMD_READ_CONF))
+        {
+            pTModule->mNewState = BASE::M_STATE_CONF;
+            pTModule->mIsStataChange = true;
+        }
+        break;
+      }
+      case BASE::M_STATE_CONF:
+      {
+        if(mCmd == BASE::CMD_RUN_START)
+        {
+            pTModule->mNewState = BASE::M_STATE_RUN;
+            pTModule->mIsStataChange = true;
+        }
+        break;
+      }
+      case BASE::M_STATE_RUN:
+      {
+        break;
+      }
+      case BASE::M_STATE_STOP:
+      {
+        break;
+      }
+      default:
+      {
+        break;
+      }
+    }
+    */
+    ;
+}
+
+static int sendMsgToSupr(BASE::INTERACTION_THREAD_INFO *pTModule, int pNewRecType)
+{
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction CMD %d", pNewRecType);
+    pthread_mutex_lock(&pTModule->mInterToSuprDatas->mInteractionRecMutex);
+    pTModule->mInterToSuprDatas->mIsNewRec = pNewRecType;
+    memcpy((char*)&pTModule->mInterToSuprDatas->mRecMsg, (char*)&pTModule->mRecMsg, sizeof(pTModule->mRecMsg));
+    pthread_mutex_unlock(&pTModule->mInterToSuprDatas->mInteractionRecMutex);
+}
+
+
+static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule)
+{
+    BASE::ReadLiftSigalNowData *mSendDatas = (BASE::ReadLiftSigalNowData *)malloc(sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
+    pthread_mutex_lock(pTModule->mSuprDatasToInterasction.mReadLiftNowDatasMutex);
+    memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction.mReadLiftNowDatas, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
+    pthread_mutex_unlock(pTModule->mSuprDatasToInterasction.mReadLiftNowDatasMutex);
+
+    sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_LIFT_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
+    free(mSendDatas);
 }
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
@@ -220,7 +288,7 @@ void* threadEntry(void* pModule)
   socklen_t mun = sizeof(pTModule->mPeerAddr);
 
   //running state
-  pTModule->mState = BASE::M_STATE_INIT;
+  pTModule->mState = BASE::M_STATE_CONF;
 
   LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction running!");
   while(pTModule->mWorking)
@@ -263,46 +331,95 @@ void* threadEntry(void* pModule)
       }
       case BASE::CMD_HAND_MOVE_START:
       {
-        printf("interaction CMD move start\n");
+        if(pTModule->mState == BASE::M_STATE_CONF)
+            sendMsgToSupr(pTModule, BASE::CMD_HAND_MOVE_START);
+        break;
+      }
+      case BASE::CMD_CYC_READ_LIFT_DATAS:
+      {
+        if(pTModule->mState == BASE::M_STATE_CONF)
+            sendCycLiftDatas(pTModule);
         break;
       }
       case BASE::CMD_HAND_MOVE_STOP:
       {
-        printf("interaction CMD move stop\n");
+        if(pTModule->mState == BASE::M_STATE_CONF)
+            sendMsgToSupr(pTModule, BASE::CMD_HAND_MOVE_STOP);
         break;
       }
       case BASE::CMD_ALL_MOVE_START:
       {
+        if(pTModule->mState == BASE::M_STATE_CONF)
+            sendMsgToSupr(pTModule, BASE::CMD_ALL_MOVE_START);
         printf("interaction CMD all move start\n");
         break;
       }
       case BASE::CMD_ALL_MOVE_STOP:
       {
+        if(pTModule->mState == BASE::M_STATE_CONF)
+            sendMsgToSupr(pTModule, BASE::CMD_ALL_MOVE_STOP);
         printf("interaction CMD all move stop\n");
         break;
       }
       case BASE::CMD_ALL_PULL_START:
       {
+        if(pTModule->mState == BASE::M_STATE_CONF)
+        {
+            //tension turn kg
+            BASE::PullLiftAllData *mAllPull = (BASE::PullLiftAllData *)pTModule->mRecMsg.Datas;
+            for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+            {
+                if(mAllPull[i].mIsValid)
+                    mAllPull[i].mHandPull *= ((mParames[i].mConfSaveWeight)/100.0);
+            }
+            sendMsgToSupr(pTModule, BASE::CMD_ALL_PULL_START);
+        }
         printf("interaction CMD all pull start\n");
         break;
       }
       case BASE::CMD_ALL_PULL_STOP:
       {
+        if(pTModule->mState == BASE::M_STATE_CONF)
+            sendMsgToSupr(pTModule, BASE::CMD_ALL_PULL_STOP);
         printf("interaction CMD all pull stop\n");
         break;
       }
       case BASE::CMD_RUN_START:
+      {
+        //改变整个系统的运行状态到RUN
+        if(pTModule->mState == BASE::M_STATE_CONF)
+        {
+          pTModule->mNewState = BASE::M_STATE_RUN;
+          pTModule->mIsStataChange = true;
+          pTModule->mState = BASE::M_STATE_RUN;
+        }
+
+        //在RUN状态下修改，Start命令发送
+        sendMsgToSupr(pTModule, BASE::CMD_RUN_START);
+        printf("interaction CMD run start\n");
+        break;
+      }
+      case BASE::CMD_CYC_READ_RUNNING_DATAS:
+      {
+        printf("interaction CMD run start\n");
+        break;
+      }
+      case BASE::CMD_CYC_READ_SHOWDE_DATAS:
       {
         printf("interaction CMD run start\n");
         break;
       }
       case BASE::CMD_RUN_STOP:
       {
+        if(pTModule->mState == BASE::M_STATE_RUN)
+            sendMsgToSupr(pTModule, BASE::CMD_RUN_STOP);
         printf("interaction CMD run  stop\n");
         break;
       }
       case BASE::CMD_RUN_STOP_E:
       {
+        if(pTModule->mState == BASE::M_STATE_RUN)
+            sendMsgToSupr(pTModule, BASE::CMD_RUN_STOP);
         printf("interaction CMD run  stop E\n");
         break;
       }
