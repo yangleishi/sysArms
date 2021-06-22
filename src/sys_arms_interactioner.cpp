@@ -42,7 +42,7 @@ static int writeConfig(BASE::ReadConfData * mParame, const int mPNum);
 //config handle move
 static int sendMsgToSupr(BASE::INTERACTION_THREAD_INFO *pTModule, int pNewRecType);
 
-static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule);
+static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmdCyc);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
@@ -75,8 +75,8 @@ static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule)
 
   bzero(&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
   pTModule->mSerAddr.sin_family = AF_INET;
-  pTModule->mSerAddr.sin_port = htons(pTModule->mSerPort);
-  pTModule->mSerAddr.sin_addr.s_addr = inet_addr(pTModule->mIpV4Str);
+  pTModule->mSerAddr.sin_port = htons(pTModule->mMyPort);
+  pTModule->mSerAddr.sin_addr.s_addr = inet_addr(pTModule->mMyIpV4Str);
 
   iRet = bind(pTModule->mSocket, (struct sockaddr*)&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
 
@@ -250,15 +250,40 @@ static int sendMsgToSupr(BASE::INTERACTION_THREAD_INFO *pTModule, int pNewRecTyp
 }
 
 
-static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule)
+static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmdCyc)
 {
-    BASE::ReadLiftSigalNowData *mSendDatas = (BASE::ReadLiftSigalNowData *)malloc(sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
-    pthread_mutex_lock(pTModule->mSuprDatasToInterasction.mReadLiftNowDatasMutex);
-    memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction.mReadLiftNowDatas, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
-    pthread_mutex_unlock(pTModule->mSuprDatasToInterasction.mReadLiftNowDatasMutex);
+  switch (mCmdCyc)
+  {
+    case BASE::CMD_CYC_READ_LIFT_DATAS:
+    {
+      BASE::ReadLiftSigalNowData *mSendDatas = (BASE::ReadLiftSigalNowData *)malloc(sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
+      pthread_mutex_lock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
+      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadLiftNowDatas, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
+      pthread_mutex_unlock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
+      printf("read lift\n");
 
-    sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_LIFT_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
-    free(mSendDatas);
+      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_LIFT_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
+      free(mSendDatas);
+      break;
+    }
+    case BASE::CMD_CYC_READ_SYS_DELAYED:
+    {
+      BASE::ReadLiftHzData *mSendDatas = (BASE::ReadLiftHzData *)malloc(sizeof(BASE::ReadLiftHzData)*DEF_SYS_ARMS_NUMS);
+      pthread_mutex_lock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
+      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadLiftHzDatas, sizeof(BASE::ReadLiftHzData)*DEF_SYS_ARMS_NUMS);
+      pthread_mutex_unlock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
+
+      printf("delayed\n");
+      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_DELAYED_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadLiftHzData)*DEF_SYS_ARMS_NUMS);
+      free(mSendDatas);
+      break;
+    }
+    default:
+    {
+      break;
+    }
+  }
+
 }
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
@@ -301,6 +326,10 @@ void* threadEntry(void* pModule)
       case BASE::CMD_LINK:
       {
         //LOGER::PrintfLog(BASE::S_APP_LOGER, "test log hear");
+        pTModule->mNewState = BASE::M_STATE_CONF;
+        pTModule->mIsStataChange = true;
+        pTModule->mState = BASE::M_STATE_CONF;
+
         printf("interaction CMD link\n");
         //TUDO  send msg to arms concl
         memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
@@ -311,6 +340,11 @@ void* threadEntry(void* pModule)
       case BASE::CMD_UNLINK:
       {
         printf("interaction CMD unlink\n");
+        //改变整个系统的运行状态到STOP
+        pTModule->mNewState = BASE::M_STATE_STOP;
+        pTModule->mIsStataChange = true;
+        pTModule->mState = BASE::M_STATE_STOP;
+
         sendMsgToUpper(pTModule, BASE::CMD_ACK_UNLINK_OK, 0, 0, 0);
         break;
       }
@@ -338,7 +372,12 @@ void* threadEntry(void* pModule)
       case BASE::CMD_CYC_READ_LIFT_DATAS:
       {
         if(pTModule->mState == BASE::M_STATE_CONF)
-            sendCycLiftDatas(pTModule);
+            sendCycLiftDatas(pTModule, BASE::CMD_CYC_READ_LIFT_DATAS);
+        break;
+      }
+      case BASE::CMD_CYC_READ_SYS_DELAYED:
+      {
+        sendCycLiftDatas(pTModule, BASE::CMD_CYC_READ_SYS_DELAYED);
         break;
       }
       case BASE::CMD_HAND_MOVE_STOP:
@@ -411,9 +450,8 @@ void* threadEntry(void* pModule)
       }
       case BASE::CMD_RUN_STOP:
       {
-        if(pTModule->mState == BASE::M_STATE_RUN)
-            sendMsgToSupr(pTModule, BASE::CMD_RUN_STOP);
-        printf("interaction CMD run  stop\n");
+        sendMsgToSupr(pTModule, BASE::CMD_RUN_STOP);
+        printf("all modules stop...\n");
         break;
       }
       case BASE::CMD_RUN_STOP_E:
@@ -421,6 +459,12 @@ void* threadEntry(void* pModule)
         if(pTModule->mState == BASE::M_STATE_RUN)
             sendMsgToSupr(pTModule, BASE::CMD_RUN_STOP);
         printf("interaction CMD run  stop E\n");
+        break;
+      }
+      case BASE::CMD_QUIT:
+      {
+        sendMsgToSupr(pTModule, BASE::CMD_QUIT);
+        printf("interaction CMD quit... \n");
         break;
       }
       default:

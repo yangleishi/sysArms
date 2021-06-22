@@ -22,10 +22,13 @@ namespace LEADER {
 static pthread_mutex_t *mPrintQueueMutex = NULL;
 BASE::MOTORS mNowMotors = {0};
 static float mCmdTension = 0;
+static BASE::SYS_TIME  mSysSendTime = {0};
 
 static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdNonblocking(int sockfd);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
+static void calSysDelayed(BASE::SYS_TIME  &mSysDelayed, BASE::SYS_TIME  mStartSysTime, BASE::SYS_TIME  mEndSysTime);
+
 
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
 
@@ -88,18 +91,25 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   //setFdNonblocking(pTModule->mSocket);
   setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TIMEOUT_S, CONF::SERVER_UDP_TIMEOUT_US);
 
-  bzero(&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
-
+  //my
   bzero(&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
   pTModule->mSerAddr.sin_family = AF_INET;
-  pTModule->mSerAddr.sin_port = htons(pTModule->mSerPort);
-  pTModule->mSerAddr.sin_addr.s_addr = inet_addr(pTModule->mIpV4Str);
+  pTModule->mSerAddr.sin_port = htons(pTModule->mMyPort);
+  pTModule->mSerAddr.sin_addr.s_addr = inet_addr(pTModule->mMyIpV4Str);
+
+  //peer
+  bzero(&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
+  pTModule->mPeerAddr.sin_family = AF_INET;
+  pTModule->mPeerAddr.sin_port = htons(pTModule->mPeerPort);
+  pTModule->mPeerAddr.sin_addr.s_addr = inet_addr(pTModule->mPeerIpV4Str);
 
   iRet = bind(pTModule->mSocket, (struct sockaddr*)&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
-
   if(iRet < 0)
     return iRet;
 
+  //powup motors
+  BASE::MOTORS mZeroMotors = {0};
+  motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_POWERON, 0, 0);
   return 0;
 }
 
@@ -114,6 +124,12 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
   return 0;
 }
 
+static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mStartSysTime, BASE::SYS_TIME  mEndSysTime)
+{
+  mSysDelayed.mLiftHz = mEndSysTime.mSysTimeS - mStartSysTime.mSysTimeS;
+  mSysDelayed.mLiftShake = mEndSysTime.mSysTimeUs - mStartSysTime.mSysTimeUs;
+  mSysDelayed.mIsValid = 1;
+}
 
 ///msg functions/////////////////
 static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
@@ -133,6 +149,8 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
   clock_gettime(CLOCK_MONOTONIC, &now);
   pMsg->mSysTime.mSysTimeS  = now.tv_sec;
   pMsg->mSysTime.mSysTimeUs = now.tv_nsec/1000;
+  mSysSendTime.mSysTimeS = pMsg->mSysTime.mSysTimeS;
+  mSysSendTime.mSysTimeUs = pMsg->mSysTime.mSysTimeUs;
 
   pMsg->mCrcCode = 0;
 
@@ -363,10 +381,10 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
           motorMoveCmd(pTModule, mNowMotors, BASE::CT_MOTOR_RUN, 0, 0);
           printf("conf motor cmd postion:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
           //send rec running data to uper
-          pTModule->mNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
-          pTModule->mNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
-          pTModule->mNowData.mHandZMoveNow = pTModule->mRecMsg.mMotors[2].mPosition;
-          pTModule->mNowData.mHandWMoveNow = pTModule->mRecMsg.mMotors[3].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandZMoveNow = pTModule->mRecMsg.mMotors[2].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandWMoveNow = pTModule->mRecMsg.mMotors[3].mPosition;
       }
       else
       {
@@ -384,10 +402,10 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
           motorMoveXYZCmd(pTModule, mNowMotors, BASE::CT_MOTOR_RUN, 0, 0);
           printf("conf motor all move postion:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
           //send rec running data to uper
-          pTModule->mNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
-          pTModule->mNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
-          pTModule->mNowData.mHandZMoveNow = pTModule->mRecMsg.mMotors[2].mPosition;
-          pTModule->mNowData.mHandWMoveNow = pTModule->mRecMsg.mMotors[3].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandZMoveNow = pTModule->mRecMsg.mMotors[2].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandWMoveNow = pTModule->mRecMsg.mMotors[3].mPosition;
       }
       else
       {
@@ -554,6 +572,9 @@ void* threadEntry(void* pModule)
     memset((char*)&pTModule->mRecMsg, 0 ,sizeof(pTModule->mRecMsg));
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
 
+    calSysDelayed(pTModule->mReadLiftHzData, mSysSendTime, pTModule->mRecMsg.mSysTime);
+    //printf("system delayed: %ds, %dus, now: \n",pTModule->mSysDelayed.mSysTimeS, pTModule->mSysDelayed.mSysTimeUs);
+
     switch (pTModule->mState)
     {
       case BASE::M_STATE_INIT:
@@ -597,6 +618,12 @@ void* threadEntry(void* pModule)
         break;
       }
       case BASE::M_STATE_STOP:
+      {
+        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_STOP, 0, 0);
+        printf("motor stoped state...\n");
+        break;
+      }
+      case BASE::M_STATE_QUIT:
       {
         motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_POWERDOWN, 0, 0);
         pTModule->mWorking = false;

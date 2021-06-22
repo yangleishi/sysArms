@@ -42,9 +42,9 @@ BASE::LOG_THREAD_INFO  mlogsModule;
 
 BASE::INTERACTION_THREAD_INFO mManInteraction;
 //interaction to supr
-BASE::InteractionDataToSupr mInteractionDatas;
-BASE::ReadLiftSigalNowData  mReadLiftNowDatas[DEF_SYS_USE_ARMS_NUMS];
-pthread_mutex_t mArmsNowDatasMutex;
+BASE::InteractionDataToSupr  mInteractionDatas;
+BASE::SuprDataToInteraction  mSuprDataToInt;
+
 
 //tensions value
 BASE::TENSIONS_NOW_DATA mTensionsData[DEF_SYS_USE_ARMS_NUMS];
@@ -193,7 +193,7 @@ static int32_t initSupr(void) {
   pthread_mutex_init(&mInteractionDatas.mInteractionSendMutex, NULL);
 
   //arms now datas mutex,this datas to interaction
-  pthread_mutex_init(&mArmsNowDatasMutex, NULL);
+  pthread_mutex_init(&mSuprDataToInt.mArmsNowDatasMutex, NULL);
 
   signal(SIGINT, signalHandle);
 
@@ -226,18 +226,17 @@ static int32_t startModules(void) {
                                                                      CONF::PRI_LOGER,
                                                                      &mlogsModule);
   // interactioner thread
-  memset((char*)mReadLiftNowDatas, 0, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_TENSIONLEADER_NUMS);
+  memset((char*)&mSuprDataToInt, 0, sizeof(mSuprDataToInt));
   mManInteraction.mWorking = true;
   mManInteraction.mLogQueue = mLogQueue;
   strcpy(mManInteraction.mThreadName, CONF::MN_INTERACTION_NAME);
-  memcpy(mManInteraction.mIpV4Str, CONF::MN_INTERACTION_SERVER_IP, sizeof(CONF::MN_INTERACTION_SERVER_IP));
-  mManInteraction.mSerPort = CONF::MN_INTERACTION_SERVER_PORT;
+  memcpy(mManInteraction.mMyIpV4Str, CONF::MN_INTERACTION_SERVER_IP, sizeof(CONF::MN_INTERACTION_SERVER_IP));
+  mManInteraction.mMyPort = CONF::MN_INTERACTION_SERVER_PORT;
   mManInteraction.mPrintQueueMutex = &mPrintQueueMutex;
   mManInteraction.mState = BASE::M_STATE_INIT;
   mManInteraction.mCpuAffinity  = CONF::CPU_INTERACTIONER;
   mManInteraction.mInterToSuprDatas = &mInteractionDatas;
-  mManInteraction.mSuprDatasToInterasction.mReadLiftNowDatas  = mReadLiftNowDatas;
-  mManInteraction.mSuprDatasToInterasction.mReadLiftNowDatasMutex = &mArmsNowDatasMutex;
+  mManInteraction.mSuprDatasToInterasction  = &mSuprDataToInt;
   gHiMInfo[CONF::ARMS_INTERACTION_ID].mPid    =  BASE::hiCreateThread(
                                                                      CONF::MN_INTERACTION_NAME,
                                                                      INTERACTIONER::threadEntry,
@@ -251,8 +250,10 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mWorking = true;
     mArmsModule[qIdx-1].mLogQueue = mLogQueue;
     strcpy(mArmsModule[qIdx-1].mThreadName, CONF::MN_NAME[qIdx]);
-    memcpy(mArmsModule[qIdx-1].mIpV4Str, CONF::MN_SERVER_IP[qIdx-1], sizeof(CONF::MN_SERVER_IP[qIdx-1]));
-    mArmsModule[qIdx-1].mSerPort = CONF::MN_SERVER_PORT[qIdx-1];
+    memcpy(mArmsModule[qIdx-1].mMyIpV4Str, CONF::MN_SERVER_IP[qIdx-1], sizeof(CONF::MN_SERVER_IP[qIdx-1]));
+    memcpy(mArmsModule[qIdx-1].mPeerIpV4Str, CONF::MN_PEER_IP[qIdx-1], sizeof(CONF::MN_PEER_IP[qIdx-1]));
+    mArmsModule[qIdx-1].mMyPort = CONF::MN_SERVER_PORT[qIdx-1];
+    mArmsModule[qIdx-1].mPeerPort = CONF::MN_PEER_PORT[qIdx-1];
     mArmsModule[qIdx-1].mState = BASE::M_STATE_INIT;
     mArmsModule[qIdx-1].mAckState = BASE::ACK_STATE_NULL;
     mArmsModule[qIdx-1].mPrintQueueMutex = &mPrintQueueMutex;
@@ -274,8 +275,8 @@ static int32_t startModules(void) {
     mArmsTension[qIdx].mWorking  = true;
     mArmsTension[qIdx].mLogQueue = mLogQueue;
     strcpy(mArmsTension[qIdx].mThreadName, CONF::MN_TENSION_NAME[qIdx]);
-    memcpy(mArmsTension[qIdx].mIpV4Str, CONF::MN_TENSION_SERVER_IP[qIdx], sizeof(CONF::MN_TENSION_SERVER_IP[qIdx]));
-    mArmsTension[qIdx].mSerPort = CONF::MN_TENSION_SERVER_PORT[qIdx];
+    memcpy(mArmsTension[qIdx].mMyIpV4Str, CONF::MN_TENSION_SERVER_IP[qIdx], sizeof(CONF::MN_TENSION_SERVER_IP[qIdx]));
+    mArmsTension[qIdx].mMyPort = CONF::MN_TENSION_SERVER_PORT[qIdx];
     mArmsTension[qIdx].mNowTension  = mTensionsData;
     mArmsTension[qIdx].mPrintQueueMutex = &mPrintQueueMutex;
     mArmsTension[qIdx].mCpuAffinity  = CONF::CPU_TENSION;
@@ -454,6 +455,25 @@ static void handleInteractionCmd()
             }
             break;
           }
+          case BASE::CMD_QUIT:
+          {
+            //quit...
+            mSysState = BASE::M_STATE_QUIT;
+            for (int32_t qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
+              mArmsModule[qIdx].mState = BASE::M_STATE_QUIT;
+            break;
+          }
+          case BASE::CMD_UNLINK:
+          {
+            //copy move to leaders
+            for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
+            {
+              pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+              mArmsModule[i].mIsNowMotorCmd = buttonType;
+              pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
+            }
+            break;
+          }
           default:
           {
             break;
@@ -577,13 +597,15 @@ static int32_t suprMainLoop(){
 
 
     //copy now datas
-    pthread_mutex_lock(&mArmsNowDatasMutex);
+    pthread_mutex_lock(&mSuprDataToInt.mArmsNowDatasMutex);
     for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
     {
       //copy conf lift datas
-      memcpy((char*)&mReadLiftNowDatas[qIdx], (char*)&mArmsModule[qIdx].mNowData, sizeof(BASE::ReadLiftSigalNowData));
+      memcpy((char*)&mSuprDataToInt.mReadLiftNowDatas[qIdx], (char*)&mArmsModule[qIdx].mReadLiftSigalNowData, sizeof(BASE::ReadLiftSigalNowData));
+      //copy HZ datas
+      memcpy((char*)&mSuprDataToInt.mReadLiftHzDatas[qIdx], (char*)&mArmsModule[qIdx].mReadLiftHzData, sizeof(BASE::ReadLiftSigalNowData));
     }
-    pthread_mutex_unlock(&mArmsNowDatasMutex);
+    pthread_mutex_unlock(&mSuprDataToInt.mArmsNowDatasMutex);
 
     //notice leader cycle
     for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
@@ -598,10 +620,11 @@ static int32_t suprMainLoop(){
 
 static void signalHandle(int mSignal)
 {
-  mSysState = BASE::M_STATE_STOP;
+  //mSysState = BASE::M_STATE_STOP;
+  mSysState = BASE::M_STATE_QUIT;
   for (int32_t qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
   {
-    mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
+    mArmsModule[qIdx].mState = BASE::M_STATE_QUIT;
   }
   printf("oops! stop!!!\n");
 }
@@ -619,7 +642,7 @@ static int32_t deInitSupr(void)
 
   pthread_cond_destroy(&mlogsModule.mPrintQueueReady);
   pthread_mutex_destroy(&mPrintQueueMutex);
-  pthread_mutex_destroy(&mArmsNowDatasMutex);
+  pthread_mutex_destroy(&mSuprDataToInt.mArmsNowDatasMutex);
 
   if(mLogQueue != NULL)
   {

@@ -33,6 +33,7 @@ typedef enum
   M_STATE_CONF,
   M_STATE_RUN,
   M_STATE_STOP,
+  M_STATE_QUIT,
 } M_STATE;
 
 //DEFINE THREAD ack state
@@ -321,20 +322,23 @@ const uint16_t  CMD_ALL_PULL_STOP = CMD_BASE + 10;
 const uint16_t  CMD_RUN_START = CMD_BASE + 11;
 const uint16_t  CMD_RUN_STOP = CMD_BASE + 12;
 const uint16_t  CMD_RUN_STOP_E = CMD_BASE + 13;
+const uint16_t  CMD_QUIT = CMD_BASE + 14;
+
 
 //cycly read datas
-const uint16_t  CMD_CYC_READ_LIFT_DATAS = CMD_BASE + 14;
-const uint16_t  CMD_CYC_READ_RUNNING_DATAS = CMD_BASE + 15;
-const uint16_t  CMD_CYC_READ_SHOWDE_DATAS = CMD_BASE + 16;
+const uint16_t  CMD_CYC_READ_SYS_DELAYED = CMD_BASE + 15;
+const uint16_t  CMD_CYC_READ_LIFT_DATAS = CMD_BASE + 16;
+const uint16_t  CMD_CYC_READ_RUNNING_DATAS = CMD_BASE + 17;
+const uint16_t  CMD_CYC_READ_SHOWDE_DATAS = CMD_BASE + 18;
 
 //leader run state
-const uint16_t  ST_HAND_MOVE_RUNNING = CMD_BASE + 17;
-const uint16_t  ST_ALL_MOVE_RUNNING = CMD_BASE + 18;
-const uint16_t  ST_ALL_PULL_RUNNING = CMD_BASE + 19;
-const uint16_t  ST_LIFT_STOPED = CMD_BASE + 20;
+const uint16_t  ST_HAND_MOVE_RUNNING = CMD_BASE + 50;
+const uint16_t  ST_ALL_MOVE_RUNNING = CMD_BASE + 51;
+const uint16_t  ST_ALL_PULL_RUNNING = CMD_BASE + 52;
+const uint16_t  ST_LIFT_STOPED = CMD_BASE + 53;
 
-const uint16_t  ST_ALL_RUN_RUNNING = CMD_BASE + 21;
-const uint16_t  ST_RUN_STOPED = CMD_BASE + 22;
+const uint16_t  ST_ALL_RUN_RUNNING = CMD_BASE + 54;
+const uint16_t  ST_RUN_STOPED = CMD_BASE + 55;
 
 //////////////////////interaction ACK指令//////////////
 const uint16_t  CMD_ACK_BASE = 0;
@@ -349,6 +353,7 @@ const uint16_t  CMD_ACK_READCONF_OK = CMD_ACK_BASE + 6;
 const uint16_t  CMD_ACK_READ_LIFT_DATAS = CMD_BASE + 7;
 const uint16_t  CMD_ACK_READ_RUNNING_DATAS = CMD_BASE + 8;
 const uint16_t  CMD_ACK_READ_SHOWDE_DATAS = CMD_BASE + 9;
+const uint16_t  CMD_ACK_READ_DELAYED_DATAS = CMD_BASE + 10;
 
 //////////////////////CONF 模式下，interaction发送给Supr同步命令类型。便于supr分类上位机发送的按钮CMD//////////////
 const uint16_t  CMD_TYPE_BASE = 0;
@@ -417,6 +422,13 @@ typedef struct{
   int   mIsValid;
 } ReadConfData;
 
+//起重界面中单元的频率,时间抖动读取
+typedef struct{
+  int   mLiftHz;
+  int   mLiftShake;
+  int   mIsValid;
+} ReadLiftHzData;
+
 //起吊界面中，上位机发送的手动控制数据命令
 typedef struct{
   int   mMudoleNum;
@@ -465,9 +477,11 @@ typedef struct{
 } InteractionDataToSupr;
 
 //interaction. supr to interaction
+
 typedef struct{
-  BASE::ReadLiftSigalNowData* mReadLiftNowDatas;
-  pthread_mutex_t*            mReadLiftNowDatasMutex;
+  BASE::ReadLiftSigalNowData  mReadLiftNowDatas[DEF_SYS_USE_ARMS_NUMS];
+  BASE::ReadLiftHzData        mReadLiftHzDatas[DEF_SYS_ARMS_NUMS];
+  pthread_mutex_t             mArmsNowDatasMutex;
 } SuprDataToInteraction;
 
 /////////////////////////////////sys //////////////////////////////////////////////
@@ -487,8 +501,10 @@ typedef struct
 
   uint32_t     mSocket;
   sockaddr_in  mSerAddr, mPeerAddr;
-  uint32_t     mSerPort;
-  char         mIpV4Str[STR_IPV4_LENGTH];
+  uint32_t     mMyPort;
+  char         mMyIpV4Str[STR_IPV4_LENGTH];
+  uint32_t     mPeerPort;
+  char         mPeerIpV4Str[STR_IPV4_LENGTH];
   M_STATE      mState;
 
   //log queue pri
@@ -538,9 +554,13 @@ typedef struct: public THREAD_INFO_HEADER
   pthread_mutex_t   mMotorMutex;
 
   //send motor data
-  ReadLiftSigalNowData  mNowData;
+  //SuprDataToInteraction mNowData;
+  ReadLiftSigalNowData  mReadLiftSigalNowData;
+  ReadLiftHzData        mReadLiftHzData;
+
 
   TENSIONS_NOW_DATA   *mNowTension;
+
 } ARMS_THREAD_INFO;
 
 //tensions thread info
@@ -559,8 +579,8 @@ typedef struct: public THREAD_INFO_HEADER
   MArmsDownData  mRecMsg;
   MArmsUpData    mSendMsg;
 
-  InteractionDataToSupr *mInterToSuprDatas;
-  SuprDataToInteraction  mSuprDatasToInterasction;
+  InteractionDataToSupr  *mInterToSuprDatas;
+  SuprDataToInteraction  *mSuprDatasToInterasction;
 
 }INTERACTION_THREAD_INFO;
 

@@ -58,8 +58,8 @@ static int initServer(BASE::TENSIONS_THREAD_INFO *pTModule)
 
   bzero(&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
   pTModule->mSerAddr.sin_family = AF_INET;
-  pTModule->mSerAddr.sin_port = htons(pTModule->mSerPort);
-  pTModule->mSerAddr.sin_addr.s_addr = inet_addr(pTModule->mIpV4Str);
+  pTModule->mSerAddr.sin_port = htons(pTModule->mMyPort);
+  pTModule->mSerAddr.sin_addr.s_addr = inet_addr(pTModule->mMyIpV4Str);
 
   iRet = bind(pTModule->mSocket, (struct sockaddr*)&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
 
