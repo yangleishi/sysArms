@@ -1,10 +1,17 @@
-/******************************************************************************
-**
-* Copyright (c)2021 SHI YANGLEI
-* All Rights Reserved
+/********************************************************************************
+* Copyright (c) 2017-2020 NIIDT.
+* All rights reserved.
 *
+* File Type : C++ Header File(*.h)
+* File Name :sys_arms_supr.hpp
+* Module :
+* Create on: 2020/12/12
+* Author: 师洋磊
+* Email: 546783926@qq.com
+* Description about this header file:系统中的超级线程模块，此模块负责创建所有线程，管理其他模块，周期的发送
+消息通知其他模块。
 *
-******************************************************************************/
+********************************************************************************/
 #include <time.h>
 #include <signal.h>
 #include <stdio.h>
@@ -585,7 +592,7 @@ static int32_t suprMainLoop(){
     changeState();
 
     // check arms  whether  conf move control
-    if(mSysState == BASE::M_STATE_CONF || mSysState == BASE::M_STATE_RUN)
+    if(mSysState == BASE::M_STATE_CONF || mSysState == BASE::M_STATE_RUN || mSysState == BASE::M_STATE_STOP)
       handleInteractionCmd();
 
     // check arms  whether  crossed
@@ -604,6 +611,8 @@ static int32_t suprMainLoop(){
       memcpy((char*)&mSuprDataToInt.mReadLiftNowDatas[qIdx], (char*)&mArmsModule[qIdx].mReadLiftSigalNowData, sizeof(BASE::ReadLiftSigalNowData));
       //copy HZ datas
       memcpy((char*)&mSuprDataToInt.mReadLiftHzDatas[qIdx], (char*)&mArmsModule[qIdx].mReadLiftHzData, sizeof(BASE::ReadLiftSigalNowData));
+      //copy run datas
+      memcpy((char*)&mSuprDataToInt.mReadRunDatas[qIdx], (char*)&mArmsModule[qIdx].mReadRunData, sizeof(BASE::ReadRunAllData));
     }
     pthread_mutex_unlock(&mSuprDataToInt.mArmsNowDatasMutex);
 

@@ -1,10 +1,16 @@
-/******************************************************************************
-**
-* Copyright (c)2021 SHI YANGLEI
-* All Rights Reserved
+/********************************************************************************
+* Copyright (c) 2017-2020 NIIDT.
+* All rights reserved.
 *
+* File Type : C++ Header File(*.h)
+* File Name :sys_arms_loger.hpp
+* Module :
+* Create on: 2020/12/12
+* Author: 师洋磊
+* Email: 546783926@qq.com
+* Description about this header file:日志模块，系统运行的情况记录在这个模块中。
 *
-******************************************************************************/
+********************************************************************************/
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>

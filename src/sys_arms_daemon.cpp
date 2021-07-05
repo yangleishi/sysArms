@@ -1,10 +1,16 @@
-/******************************************************************************
-**
-* Copyright (c)2021 SHI YANGLEI
-* All Rights Reserved
+/********************************************************************************
+* Copyright (c) 2017-2020 NIIDT.
+* All rights reserved.
 *
+* File Type : C++ Header File(*.h)
+* File Name :sys_arms_daemon.hpp
+* Module :
+* Create on: 2020/12/12
+* Author: 师洋磊
+* Email: 546783926@qq.com
+* Description about this header file:创建线程模块（后期修改为多进程），修改线程优先级，线程绑定核模块
 *
-******************************************************************************/
+********************************************************************************/
 
 #include <unistd.h>
 #include <stdio.h>
@@ -15,7 +21,12 @@
 #include "sys_arms_daemon.hpp"
 
 namespace BASE {
+/******************************************************************************
+* @param vDaemonName : [in/out]待创建进程的名字，字符串类型
 
+* @return Descriptions
+* @TUDO
+******************************************************************************/
 void hiCreateDaemon(const char *vDaemonName) {
 
   //This is daemon since ppid==1
@@ -69,11 +80,15 @@ void hiCreateDaemon(const char *vDaemonName) {
   //syslog(5, "Create Daemon OK, %s", vDaemonName);
 }
 
-void * thread_start1(void *)
-{
 
-}
-
+/******************************************************************************
+* @param cThreadName : [in]待创建线程的名字，字符串类型
+* @param thread_start : [in]待创建线程的函数入口
+* @param iPriority : [in]待创建线程的优先级
+* @param pModule : [in]待创建线程的参数指针
+* @return Descriptions
+* @exception pthread_t: 此函数返回新创建的线程的pid
+******************************************************************************/
 pthread_t hiCreateThread(const char *cThreadName,
                          void *(*thread_start)(void *),
                          int32_t iPriority,
@@ -101,7 +116,6 @@ pthread_t hiCreateThread(const char *cThreadName,
        printf("error2\n");
 //something wrong
   }
-
 
   iRet = pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
   if (iRet != 0) {
@@ -146,17 +160,12 @@ pthread_t hiCreateThread(const char *cThreadName,
   return pthreadId;
 }
 
-
-void hiGetThreadPri(pthread_t pPid) {
-  struct sched_param schedParam;
-  int policy = 0;
-
-  pthread_getschedparam(pPid, &policy, &schedParam);
-  printf("policy=0x%x schedParam.sched_priority=0x%x\n", policy,
-         schedParam.sched_priority);
-  return;
-}
-
+/******************************************************************************
+* @param pPid : [in]待设置线程的pid
+* @param iPriority : [in]待设置线程的优先级
+* @return Descriptions
+* 此函数设置线程的优先级
+******************************************************************************/
 void hiSetThreadsched(pthread_t pPid, const int32_t iPriority) {
   struct sched_param schedParam;
   memset(&schedParam, 0, sizeof(schedParam));
@@ -165,6 +174,11 @@ void hiSetThreadsched(pthread_t pPid, const int32_t iPriority) {
   return;
 }
 
+/******************************************************************************
+* @param mCpuI : [in]当前线程要绑定的cpu号，**特别注意自己控制器有多少核
+* @return Descriptions
+* 此函数将当前线程绑定到mCpuI核上
+******************************************************************************/
 void hiSetCpuAffinity(int mCpuI)
 {
     //return;

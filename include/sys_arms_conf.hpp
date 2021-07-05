@@ -1,10 +1,18 @@
-/******************************************************************************
-**
-* Copyright (c)2021 SHI YANGLEI
-* All Rights Reserved
+/********************************************************************************
+* Copyright (c) 2017-2020 NIIDT.
+* All rights reserved.
 *
+* File Type : C++ Header File(*.h)
+* File Name :sys_arms_conf.hpp
+* Module : 如果一个 .h 文件声明了多个模块概念, 则文件注释应当对文件的内容做一个大致的说明, 同时说明各
+概念之间的联系;
+* Create on: 2020/12/12
+* Author: 师洋磊
+* Email: 546783926@qq.com
+* Description about this header file:整个系统的初始配置都在这个文件中，开启多少个线程，线程的名字
+server client的IP和port
 *
-******************************************************************************/
+********************************************************************************/
 
 #ifndef SYS_ARMS_CONF_HPP
 #define SYS_ARMS_CONF_HPP

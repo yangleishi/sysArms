@@ -1,10 +1,16 @@
-﻿/******************************************************************************
-**
-* Copyright (c)2021 SHI YANGLEI
-* All Rights Reserved
+﻿/********************************************************************************
+* Copyright (c) 2017-2020 NIIDT.
+* All rights reserved.
 *
+* File Type : C++ Header File(*.h)
+* File Name :sys_arms_daemon.hpp
+* Module :
+* Create on: 2020/12/12
+* Author: 师洋磊
+* Email: 546783926@qq.com
+* Description about this header file:创建线程模块（后期修改为多进程），修改线程优先级，线程绑定核模块
 *
-******************************************************************************/
+********************************************************************************/
 #ifndef SYS_ARMS_DEFS_H
 #define SYS_ARMS_DEFS_H
 
@@ -51,18 +57,95 @@ typedef enum
   S_ARMS_DATA,
 } LOG_SAVA_W;
 
-////////////////////////////////////11 arms  UDP communication protocol   /////////////////////////////////////
+////////////////////////////////////11 组机械臂协议中的定义   /////////////////////////////////////
+//协议中系统标识符号定义,上位机ID 控制版ID/////////////
+/**********************************************
+拉力计模块1-21为:0x02—0x16
+数据中继模块1-21为: 0x17—0x2B
+电机控制板1-21为: 0x42—0x56
+上位机1-11为:0x57—0x61
+数据站1-11为:0x62—0xCE
+**********************************************/
+const uint16_t   ID_CONTROL_PANEL_FIR = 0x42;
+const uint16_t   ID_LEADER_FIR = 0x57;
 
-///for udp msg ctrl part/////////////
 
-//Define the motor ctrl
+//协议中消息类型////////////////////////////////
+/**********************************************
+命令消息:0x00(本地发给上位机)
+数据消息:0x01(本地发给上位机)数据定义见附 3
+时间校准:0x02(上位机发给本地)
+设备控制消息:0x03(上位机发给本地,设置设备的状态表)消息格式与状态表见附 3
+设备参数设置消息:0x04(上位机发给本地)
+设备参数读取消息:0x05(上位机发给本地)
+状态消息:0x06(上位机发给本地)
+消息重发请求:0x07(双向)
+消息正确应答:0x08(双向)
+消息错误应答:0x09(双向)
+**********************************************/
+const uint16_t   M_TYPE_TO_LEADER_CMD = 0x00;
+const uint16_t   M_TYPE_TO_LEADER_DATA = 0x01;
+const uint16_t   M_TYPE_TO_CONTROLER_TIME = 0x02;
+const uint16_t   M_TYPE_TO_CONTROLER_CMD = 0x03;
+const uint16_t   M_TYPE_TO_CONTROLER_WCONF = 0x04;
+const uint16_t   M_TYPE_TO_CONTROLER_RCONF = 0x05;
+const uint16_t   M_TYPE_TO_CONTROLER_STATE = 0x06;
+const uint16_t   M_TYPE_TO_ALL_REPEAT= 0x07;
+const uint16_t   M_TYPE_TO_ALL_ANSWER_OK= 0x08;
+const uint16_t   M_TYPE_TO_ALL_ANSWER_FAILED= 0x09;
+
+//定义电机控制命令//////////////////////////////
+/**********************************************
+0x00 急停
+0x01 正时针运动
+0x02 逆时针运动
+0x03 正常停止(带减速过程)
+0x04 曲线变速
+0x05 梯形变速
+0x06 立即变速
+0x07 曲线改变位置
+0x08 梯形改变位置
+0x09 立即改变位置
+**********************************************/
+const uint8_t   CT_MOTOR_STOPE = 0x00;
+const uint8_t   CT_MOTOR_MOVE_POSITIVE = 0x01;
+const uint8_t   CT_MOTOR_MOVE_INVERSE  = 0x02;
+const uint8_t   CT_MOTOR_STOP = 0x03;
+const uint8_t   CT_MOTOR_MOVE_V_CURVE = 0x04;
+const uint8_t   CT_MOTOR_MOVE_V_TRAPEZIUM  = 0x05;
+const uint8_t   CT_MOTOR_MOVE_V_IMMEDIATELY = 0x06;
+const uint8_t   CT_MOTOR_MOVE_P_CURVE = 0x07;
+const uint8_t   CT_MOTOR_MOVE_P_TRAPEZIUM  = 0x08;
+const uint8_t   CT_MOTOR_MOVE_P_IMMEDIATELY = 0x09;
+
+
 const uint8_t   CT_MOTOR_POWERDOWN = 0x00;
 const uint8_t   CT_MOTOR_POWERON    = 0x01;
-const uint8_t   CT_MOTOR_STOP  = 0x02;
 const uint8_t   CT_MOTOR_ZERO   = 0x03;
 const uint8_t   CT_MOTOR_RUN   = 0x04;
 
-//Define the motor rec state
+//定义控制板反馈状态
+/*******************************************
+0x00 正常
+0x01 系统错误
+0x02 内部设备模块错误
+0x03 通讯模块无法通讯
+0x04 电流异常
+0x05 电池异常
+0x06 传感器异常
+0x07 电机异常
+0x08 拉力计传感器异常
+*******************************************/
+const uint16_t   ST_SYS_OK   = 0x00;
+const uint16_t   ST_SYS_ERROR    = 0x01;
+const uint16_t   ST_SYS_MODULES_ERROR   = 0x02;
+const uint16_t   ST_SYS_UN_COMMUNICATE    = 0x03;
+const uint16_t   ST_SYS_ELECTRIC_ABNORMAL   = 0x04;
+const uint16_t   ST_SYS_BATTERY_ABNORMAL    = 0x05;
+const uint16_t   ST_SYS_SENSOR_ABNORMAL    = 0x06;
+const uint16_t   ST_SYS_MOTOR_ABNORMAL   = 0x07;
+const uint16_t   ST_SYS_TENSION_ABNORMAL    = 0x08;
+
 const uint8_t   ST_MOTOR_START   = 0x00;
 const uint8_t   ST_MOTOR_STOP    = 0x01;
 
@@ -141,7 +224,7 @@ typedef struct
 typedef struct
 {
   //ctrl motors data
-  uint16_t   mCmd;
+  uint8_t    mCmd;
   float      mPosition;
   float      mSpeed;
 } MOTOR_CTRL;
@@ -168,35 +251,38 @@ typedef struct
 
 typedef struct
 {
-  //frame start 0x1ACF
-  uint16_t   mFrameStart;
+  //frame unique dev 0-10
+  uint16_t   mIdentifier;
 
-  //frame unique dev 0xFF
-  uint8_t   mIdentifier;
+  //msg type
+  uint16_t   mMsgType;
 
-  //APID 0x02
-  uint8_t    mApid;
+  //随机码，上位机，自加一
+  uint16_t   mRandomCode;
 
-  //dev type 0x01
-  uint8_t    mType;
+  //states
+  uint16_t   mStateCode;
 
-  // frame time
-  SYS_TIME  mSysTime;
+  //时间戳，妙、微妙
+  SYS_TIME   mSysTime;
 
-} MSG_S_HEARDER;
+  //数据长度
+  uint16_t   mDataLength;
+} MSG_HEARDER;
 
 // UDP, send control data structure. 11 arms
-typedef struct: public MSG_S_HEARDER
+typedef struct: public MSG_HEARDER
 {
   //ctrl motors data
   MOTORS    mMotors;
 
-  //mCrcCode++
-  uint16_t mCrcCode;
+  //crc 校验码
+  uint8_t   mCrcCodeH;
+  uint8_t   mCrcCodeL;
 } ARMS_S_MSG;
 
 // UDP, send control data structure tensions
-typedef struct: public MSG_S_HEARDER
+typedef struct: public MSG_HEARDER
 {
   //ctrl tensions start/stop data. 0 1
   uint8_t    mCmd;
@@ -218,53 +304,40 @@ typedef struct
 } MOTOR_REC_DATAS;
 
 // UDP, rec data structure. 11 arms
-typedef struct
+typedef struct: public MSG_HEARDER
 {
-  //frame start 0x1ACF
-  uint16_t   mFrameStart;
-
-  //frame unique dev 0xFF
-  uint8_t   mIdentifier;
-
-  //APID 0x01
-  uint8_t    mApid;
-
-  //dev type 0x01
-  uint8_t    mType;
-
-  //states
-  uint16_t   mStateCode;
-
-  // frame time
-  SYS_TIME  mSysTime;
-
 //****************************  rec Datas  ***********************************//
   // Switch datas
-  uint16_t  mSwitchStateCode;
+  uint8_t   mSwitchStateCode;
   uint16_t  mSwitchTiggers;
 
   //inclinometers  datas 0-7,7-15
-  uint16_t  mInclinometersStateCode;
+  uint8_t   mInclinometersStateCode;
   float     mInclinometer1_x;
   float     mInclinometer1_y;
   float     mInclinometer2_x;
   float     mInclinometer2_y;
 
   //inclinometers  datas 0-7,7-15
-  uint16_t  mSikosStateCode;
+  uint8_t   mSikosStateCode;
   float     mSiko1;
   float     mSiko2;
 
   //encoder  data
   uint8_t   mEncoderStateCode;
-  uint64_t  mEncoders;
+  uint32_t  mEncoders;
 
 
-  //motors datas
+  //四个电机数据
   MOTOR_REC_DATAS mMotors[4];
 
-  //mCrcCode++
-  uint16_t mCrcCode;
+  //拉力计
+  uint8_t   mTensionCode;
+  float     mTension;
+
+  //crc 校验码
+  uint8_t   mCrcCodeH;
+  uint8_t   mCrcCodeL;
 } ARMS_R_MSG;
 
 //tensions. 6 float data
@@ -465,6 +538,35 @@ typedef struct{
   int    mIsValid;
 } PullLiftAllData;
 
+//运行界面中细节信息显示,
+typedef struct{
+  int     mMudoleNum;
+//运行界面中信息显示,
+  float   runR_sysMsg_X;
+  float   runR_sysMsg_Y;
+  float   runR_sysMsg_Z;
+  float   runR_sysMsg_AngleX;
+  float   runR_sysMsg_AngleY;
+  float   runR_sysMsg_Pull;
+  float   runR_sysMsg_PullE;
+//运行界面中细节调试显示,
+  float   runD_Rsiko1;      //磁栅尺1
+  float   runD_Rsiko2;      //磁栅尺2
+  float   runD_Level1;      //水平仪1
+  float   runD_Level2;      //水平仪2
+  float   runD_RencoderT;   //翻转编码器
+  float   runD_PullNow;     //拉力计当前值
+  float   runD_PullSet;     //拉力计设定值
+  float   runD_RencoderXNow;     //编码器当前值
+  float   runD_RencoderXSet;     //编码器设定值
+  float   runD_RencoderYNow;     //编码器当前值
+  float   runD_RencoderYSet;     //编码器设定值
+  float   runD_RencoderZNow;     //编码器当前值
+  float   runD_RencoderZSet;     //编码器设定值
+  int     mIsValid;
+} ReadRunAllData;
+
+
 //interaction cmd datas to supr
 typedef struct{
   int            mIsNewRec;
@@ -481,6 +583,7 @@ typedef struct{
 typedef struct{
   BASE::ReadLiftSigalNowData  mReadLiftNowDatas[DEF_SYS_USE_ARMS_NUMS];
   BASE::ReadLiftHzData        mReadLiftHzDatas[DEF_SYS_ARMS_NUMS];
+  BASE::ReadRunAllData        mReadRunDatas[DEF_SYS_ARMS_NUMS];
   pthread_mutex_t             mArmsNowDatasMutex;
 } SuprDataToInteraction;
 
@@ -557,6 +660,7 @@ typedef struct: public THREAD_INFO_HEADER
   //SuprDataToInteraction mNowData;
   ReadLiftSigalNowData  mReadLiftSigalNowData;
   ReadLiftHzData        mReadLiftHzData;
+  ReadRunAllData        mReadRunData;
 
 
   TENSIONS_NOW_DATA   *mNowTension;

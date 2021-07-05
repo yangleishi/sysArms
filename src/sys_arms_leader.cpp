@@ -1,10 +1,17 @@
-/******************************************************************************
-**
-* Copyright (c)2021 SHI YANGLEI
-* All Rights Reserved
+/********************************************************************************
+* Copyright (c) 2017-2020 NIIDT.
+* All rights reserved.
 *
+* File Type : C++ Header File(*.h)
+* File Name :sys_arms_leader.hpp
+* Module :
+* Create on: 2020/12/12
+* Author: 师洋磊
+* Email: 546783926@qq.com
+* Description about this header file:机械臂控制模块，控制对应的机械臂，接收supr发来的周期性的控制指令，
+将控制指令发送给机械臂板子，并接收机械臂板子发来的运行数据。
 *
-******************************************************************************/
+********************************************************************************/
 #include <stdio.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -19,7 +26,6 @@
 
 namespace LEADER {
 
-static pthread_mutex_t *mPrintQueueMutex = NULL;
 BASE::MOTORS mNowMotors = {0};
 static float mCmdTension = 0;
 static BASE::SYS_TIME  mSysSendTime = {0};
@@ -27,7 +33,7 @@ static BASE::SYS_TIME  mSysSendTime = {0};
 static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdNonblocking(int sockfd);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
-static void calSysDelayed(BASE::SYS_TIME  &mSysDelayed, BASE::SYS_TIME  mStartSysTime, BASE::SYS_TIME  mEndSysTime);
+static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mStartSysTime, BASE::SYS_TIME  mEndSysTime);
 
 
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
@@ -36,13 +42,11 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
 static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors);
 
 static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg);
+static uint16_t copyArmsRunDatas(BASE::ARMS_R_MSG mRecMsg, BASE::ReadRunAllData &mRunDatas);
 static int32_t checkHardError(uint16_t mStatusCode);
 //pTmodule cmd or data send to client
 static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel);
 static int motorMoveXYZCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel);
-
-static int motorMoveXYZData(BASE::MoveLiftAllData *pMoveData, BASE::MOTORS &mMotors);
-
 
 static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors);
 
@@ -55,8 +59,11 @@ static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-
-//设置非阻塞
+/******************************************************************************
+* 功能：此函数设置socket套接字，设置为阻塞模式（不建议，阻塞模式下程序会阻塞，建议设置非阻塞超时）。
+* @param sockfd : [in]套接子id，
+* @return Descriptions
+******************************************************************************/
 static void setFdNonblocking(int sockfd)
 {
     int flag = fcntl(sockfd, F_GETFL, 0);
@@ -69,7 +76,13 @@ static void setFdNonblocking(int sockfd)
     }
 }
 
-
+/******************************************************************************
+* 功能：此函数设置socket套接字超时时间。
+* @param sockfd : [in]套接子id，
+* @param mSec : [in]套接字超时妙
+* @param mUsec : [in]套接字超时微妙
+* @return Descriptions
+******************************************************************************/
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
 {
   struct timeval timeout;
@@ -79,6 +92,11 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
     LOGER::PrintfLog(BASE::S_APP_LOGER, "setsockopt failed:");
 }
 
+/******************************************************************************
+* 功能：此函数初始化模块，初始化套接字，绑定ip端口，主要和机械臂底层板对接
+* @param pTModule : pTModule是线程信息结构体指针，里边存储的线程运行期间用到的数据和交换通信数据
+* @return Descriptions
+******************************************************************************/
 static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
@@ -113,6 +131,11 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   return 0;
 }
 
+/******************************************************************************
+* 功能：此函数销毁初始化模块，释放线程指针里的内容
+* @param pTModule : pTModule是线程信息结构体指针，里边存储的线程运行期间用到的数据和交换通信数据
+* @return Descriptions
+******************************************************************************/
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
 {
   if(pTModule->mSocket >= 0)
@@ -124,6 +147,13 @@ static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule)
   return 0;
 }
 
+/******************************************************************************
+* 功能：此函数计算系统延时（消息发出时间，到接收到机械臂控制板发来的msg时间），使用supr作为同步时钟
+* @param mSysDelayed : mSysDelayed是延时结构体，和上位机延时显示结构体一致，延时将存储在此结构体中。
+* @param mStartSysTime : mStartSysTime是消息发送时间。
+* @param mEndSysTime : mEndSysTime是消息接收时间。
+* @return Descriptions
+******************************************************************************/
 static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mStartSysTime, BASE::SYS_TIME  mEndSysTime)
 {
   mSysDelayed.mLiftHz = mEndSysTime.mSysTimeS - mStartSysTime.mSysTimeS;
@@ -131,7 +161,12 @@ static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mS
   mSysDelayed.mIsValid = 1;
 }
 
-///msg functions/////////////////
+/******************************************************************************
+* 功能：组包函数，将motor电机控制结构，组成ARMS_S_MSG类型消息
+* @param pMsg : pMsg是发送给机械臂控制板的消息，
+* @param mMotors : mMotors是消电机控制数据，组包到pMsg里
+* @return Descriptions
+******************************************************************************/
 static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
 {
   int32_t iRet = 0;
@@ -140,9 +175,7 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
 
   struct timespec now;
 
-  pMsg->mFrameStart = 0x1ACF;
   pMsg->mIdentifier = 0xFF;
-  pMsg->mApid = 0x02;
 
   memcpy((char*)&(pMsg->mMotors), (char*)&mMotors, sizeof(mMotors));
 
@@ -152,11 +185,22 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
   mSysSendTime.mSysTimeS = pMsg->mSysTime.mSysTimeS;
   mSysSendTime.mSysTimeUs = pMsg->mSysTime.mSysTimeUs;
 
-  pMsg->mCrcCode = 0;
+  //TUDO
+  pMsg->mCrcCodeH = 0;
+  pMsg->mCrcCodeL = 0;
 
   return iRet;
 }
 
+/******************************************************************************
+* 功能：机械臂控制函数，发送控制指令
+* @param pMsg : pTModule是线程信息结构体指针，里边存储的线程运行期间用到的数据和交换通信数据
+* @param mMotors : mMotors是电机控制数据，
+* @param mCtrl : mCtrl是电机控制命令，cmd
+* @param mDirection : mDirection是电机转动方向
+* @param mPosOrVel : mPosOrVel是电机位置控制，还是速度控制
+* @return Descriptions
+******************************************************************************/
 static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel)
 {
   int32_t iRet = 0;
@@ -177,6 +221,16 @@ static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors,
   return  iRet;
 }
 
+
+/******************************************************************************
+* 功能：机械臂控制函数，发送控制指令。只控制XYZ轴运动，没有控制拉力电机
+* @param pMsg : pTModule是线程信息结构体指针，里边存储的线程运行期间用到的数据和交换通信数据
+* @param mMotors : mMotors是电机控制数据，
+* @param mCtrl : mCtrl是电机控制命令，cmd
+* @param mDirection : mDirection是电机转动方向
+* @param mPosOrVel : mPosOrVel是电机位置控制，还是速度控制
+* @return Descriptions
+******************************************************************************/
 static int motorMoveXYZCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel)
 {
     int32_t iRet = 0;
@@ -198,7 +252,12 @@ static int motorMoveXYZCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMoto
     return  iRet;
 }
 
-
+/******************************************************************************
+* 功能：电机控制，
+* @param pTModule : pTModule是线程信息结构体，存储socket，收发电机消息结构体
+* @param mMotors : mMotors是电机控制数据，组包到pMsg里
+* @return Descriptions
+******************************************************************************/
 static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors)
 {
   int32_t iRet = 0;
@@ -207,6 +266,14 @@ static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors)
   return  iRet;
 }
 
+
+//TUDO
+/******************************************************************************
+* 功能：检查电机运行状态，是否报错
+* @param mRecMsg : mRecMsg是机械臂接收消息，包含电机，传感器数据及状态
+* @return Descriptions
+  返回4个电机检查是否有错误标志位
+******************************************************************************/
 static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg)
 {
   uint16_t iRet = 0;
@@ -222,6 +289,12 @@ static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg)
   return iRet;
 }
 
+/******************************************************************************
+* 功能：检查机械臂硬件是否有错
+* @param mStatusCode :mStatusCode是机械臂接收消息的状态码，标识机械臂是否出错
+* @return Descriptions
+  返回机械臂是否报错
+******************************************************************************/
 static int32_t checkHardError(uint16_t mStatusCode)
 {
   int32_t iRet = 0;
@@ -230,12 +303,24 @@ static int32_t checkHardError(uint16_t mStatusCode)
   return iRet;
 }
 
-//TUDO
+/******************************************************************************
+* 功能：读取拉力计值
+* @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针
+* @param devInt : devInt是拉力计index下标
+* @return Descriptions
+  返回devInt拉力计数据
+******************************************************************************/
 static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule, int devInt)
 {
   return  pTModule->mNowTension[devInt].iNewTensions ? pTModule->mNowTension[devInt].mTensions : -1.0;
 }
 
+
+/******************************************************************************
+* 功能：leader处于初始化状态下，循环调用的函数，主要是检查arms状态，上电机械臂电机
+* @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针
+* @return Descriptions
+******************************************************************************/
 static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
@@ -277,11 +362,17 @@ static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule)
   return iRet;
 }
 
+/******************************************************************************
+* 功能：leader处于配置状态下，循环调用的函数，配置模式下，上位机可以读取、保存配置，手动控制
+       整体控制等
+* @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针
+* @return Descriptions
+******************************************************************************/
 static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
 
-  //check hard error
+  //检查是否机械臂报错
   if(checkHardError(pTModule->mRecMsg.mStateCode))
   {
     LOGER::PrintfLog(BASE::S_APP_LOGER, "***conf state: hard error.statues code :%d", pTModule->mRecMsg.mStateCode);
@@ -291,7 +382,7 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
     return -1;
   }
 
-  //check motor if running
+  //检查电机是否报错
   uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
   if(mMotorState != 0) // some motor stop. then stop all modules
   {
@@ -303,7 +394,7 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
 
 
 /**************************** TUDU send cmd to motor*************************/
-  //mIsNowMotorCmd stop handle cmd
+  //确认上位机发来的cmd是不是停止命令，如果是的话就停止电机转动
   if((pTModule->mIsNowMotorCmd == BASE::CMD_HAND_MOVE_STOP) || (pTModule->mIsNowMotorCmd == BASE::CMD_ALL_MOVE_STOP) || (pTModule->mIsNowMotorCmd == BASE::CMD_ALL_PULL_STOP))
   {
       //stop
@@ -458,6 +549,24 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
   return iRet;
 }
 
+//TUDU
+static uint16_t copyArmsRunDatas(BASE::ARMS_R_MSG mRecMsg, BASE::ReadRunAllData &mRunDatas)
+{
+  mRunDatas.mIsValid = 1;
+  mRunDatas.runD_Rsiko1 = mRecMsg.mSiko1;
+  mRunDatas.runD_Rsiko2 = mRecMsg.mSiko2;
+  mRunDatas.runD_Level1 = mRecMsg.mInclinometer1_x;
+  mRunDatas.runD_Level2 = mRecMsg.mInclinometer1_y;
+  mRunDatas.runR_sysMsg_X = mRecMsg.mMotors[0].mPosition;
+  mRunDatas.runR_sysMsg_Y = mRecMsg.mMotors[1].mPosition;
+  mRunDatas.runR_sysMsg_Z = mRecMsg.mMotors[2].mPosition;
+
+  mRunDatas.runD_RencoderT = mRecMsg.mEncoders;
+  mRunDatas.runD_RencoderXNow = mRecMsg.mMotors[0].mEncoder;
+  mRunDatas.runD_RencoderYNow = mRecMsg.mMotors[1].mEncoder;
+  mRunDatas.runD_RencoderZNow = mRecMsg.mMotors[2].mEncoder;
+}
+
 static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
@@ -510,6 +619,8 @@ static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule)
       BASE::MOTORS lMotors = {0};
       pTModule->mNewRecMsg = true;
       float tensiosV = readTensionValue(pTModule,  pTModule->mRecMsg.mIdentifier);
+      pTModule->mReadRunData.runD_PullNow = tensiosV;
+      copyArmsRunDatas(pTModule->mRecMsg, pTModule->mReadRunData);
       motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
       printf("run motor all running\n");
       break;
@@ -593,7 +704,7 @@ void* threadEntry(void* pModule)
         //TUDO**** rec error msg then stop app
         //printf("ok rec size:%d, mpid:%d\n", size, pTModule->mRecMsg.mApid);
         //perror("leader rec");
-        if(size != sizeof(BASE::ARMS_R_MSG) && pTModule->mRecMsg.mApid != 2)
+        if(size != sizeof(BASE::ARMS_R_MSG))
         {
           LOGER::PrintfLog(BASE::S_APP_LOGER, "conf state: %s, client overtime or lost link. stop app", pTModule->mThreadName);
           //stop all modules

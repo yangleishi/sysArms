@@ -1,10 +1,16 @@
-/******************************************************************************
-**
-* Copyright (c)2021 SHI YANGLEI
-* All Rights Reserved
+/********************************************************************************
+* Copyright (c) 2017-2020 NIIDT.
+* All rights reserved.
 *
+* File Type : C++ Header File(*.h)
+* File Name :sys_arms_daemon.hpp
+* Module :
+* Create on: 2020/12/12
+* Author: 师洋磊
+* Email: 546783926@qq.com
+* Description about this header file:创建线程模块（后期修改为多进程），修改线程优先级，线程绑定核模块
 *
-******************************************************************************/
+********************************************************************************/
 #include <stdlib.h>
 
 #ifndef SYS_ARMS_DAEMON_HPP

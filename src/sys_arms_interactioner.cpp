@@ -1,10 +1,16 @@
-/******************************************************************************
-**
-* Copyright (c)2021 SHI YANGLEI
-* All Rights Reserved
+/********************************************************************************
+* Copyright (c) 2017-2020 NIIDT.
+* All rights reserved.
 *
+* File Type : C++ Header File(*.h)
+* File Name :sys_arms_daemon.hpp
+* Module :
+* Create on: 2020/12/12
+* Author: 师洋磊
+* Email: 546783926@qq.com
+* Description about this header file:创建线程模块（后期修改为多进程），修改线程优先级，线程绑定核模块
 *
-******************************************************************************/
+********************************************************************************/
 
 #include <stdio.h>
 #include <unistd.h>
@@ -42,11 +48,18 @@ static int writeConfig(BASE::ReadConfData * mParame, const int mPNum);
 //config handle move
 static int sendMsgToSupr(BASE::INTERACTION_THREAD_INFO *pTModule, int pNewRecType);
 
-static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmdCyc);
+static int sendCycDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmdCyc);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+/******************************************************************************
+* 功能：此函数设置socket套接字超时时间。
+* @param sockfd : [in]套接子id，
+* @param mSec : [in]套接字超时妙
+* @param mUsec : [in]套接字超时微妙
+* @return Descriptions
+******************************************************************************/
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
 {
   struct timeval timeout;
@@ -58,7 +71,11 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   }
 }
 
-
+/******************************************************************************
+* 功能：此函数初始化模块，interaction作为服务器端，初始化套接字，绑定ip端口
+* @param pTModule : pTModule是线程信息结构体指针，里边存储的线程运行期间用到的数据和交换通信数据
+* @return Descriptions
+******************************************************************************/
 static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
@@ -86,7 +103,11 @@ static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule)
   return 0;
 }
 
-
+/******************************************************************************
+* 功能：此函数销毁初始化模块，释放线程指针里的内容
+* @param pTModule : pTModule是线程信息结构体指针，里边存储的线程运行期间用到的数据和交换通信数据
+* @return Descriptions
+******************************************************************************/
 static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
 {
   if(pTModule->mSocket >= 0)
@@ -98,7 +119,12 @@ static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
   return 0;
 }
 
-
+/******************************************************************************
+* 功能：此函数读取配置文件，将系统配置文件读取到ReadConfData结构体中
+* @param mParame : mParame是保存配置信息结构体指针，主要是供上位机显示，内部系统使用。
+                   该配置信息可以通过上位机设置
+* @return Descriptions
+******************************************************************************/
 static int readConfig(BASE::ReadConfData * mParame)
 {
   int iRet = 0;
@@ -150,6 +176,13 @@ static int readConfig(BASE::ReadConfData * mParame)
   return iRet;
 }
 
+
+/******************************************************************************
+* 功能：此函数保存配置文件模块，将系统sParame保存到配置文件中
+* @param mParame : sParame是保存配置信息结构体指针，
+* @param mPNum : smPNum是保存配置信息条数，
+* @return Descriptions
+******************************************************************************/
 static int writeConfig(BASE::SaveConfData * sParame, const int mPNum)
 {
   int iRet = 0;
@@ -189,6 +222,16 @@ static int writeConfig(BASE::SaveConfData * sParame, const int mPNum)
   return iRet;
 }
 
+
+/******************************************************************************
+* 功能：此函数保将msg消息发送给上位机
+* @param pTModule : pTModule是线程信息指针，里边包含发送/接收消息，socket等信息
+* @param StatusWord : StatusWord是msg状态字，
+* @param StatusCode : StatusCode是msg状态码
+* @param pData : pData是msg的数据段指针，要发送的数据
+* @param dataSize : dataSize是msg的数据的大小
+* @return Descriptions
+******************************************************************************/
 static void sendMsgToUpper(BASE::INTERACTION_THREAD_INFO *pTModule, const uint16_t StatusWord, const uint16_t StatusCode, const char* pData, int dataSize)
 {
     BASE::MArmsUpData mSendMsg;
@@ -240,6 +283,13 @@ static void changeState(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmd)
     ;
 }
 
+
+/******************************************************************************
+* 功能：此函数保将上位机msg消息supr线程，supr发送周期控制指令给leader
+* @param pTModule : pTModule是线程信息指针，里边包含发送/接收消息，socket等信息
+* @param pNewRecType :发送给supr的cmd类型
+* @return Descriptions
+******************************************************************************/
 static int sendMsgToSupr(BASE::INTERACTION_THREAD_INFO *pTModule, int pNewRecType)
 {
     LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction CMD %d", pNewRecType);
@@ -249,8 +299,14 @@ static int sendMsgToSupr(BASE::INTERACTION_THREAD_INFO *pTModule, int pNewRecTyp
     pthread_mutex_unlock(&pTModule->mInterToSuprDatas->mInteractionRecMutex);
 }
 
-
-static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmdCyc)
+/******************************************************************************
+* 功能：  arms周期运行数据会放在supr统一管理，此函数向supr请求循环运行数据，包括整个系统配置，手动运行
+  自动运行/细节显示等的数据
+* @param pTModule : pTModule是线程信息指针，里边包含发送/接收消息，socket等信息
+* @param mCmdCyc  : mCmdCyc是循环读取周期数据cmd命令
+* @return Descriptions
+******************************************************************************/
+static int sendCycDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmdCyc)
 {
   switch (mCmdCyc)
   {
@@ -278,6 +334,18 @@ static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mC
       free(mSendDatas);
       break;
     }
+    case BASE::CMD_CYC_READ_RUNNING_DATAS:
+    {
+      BASE::ReadRunAllData *mSendDatas = (BASE::ReadRunAllData *)malloc(sizeof(BASE::ReadRunAllData)*DEF_SYS_ARMS_NUMS);
+      pthread_mutex_lock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
+      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadRunDatas, sizeof(BASE::ReadRunAllData)*DEF_SYS_ARMS_NUMS);
+      pthread_mutex_unlock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
+
+      printf("run data\n");
+      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_RUNNING_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadRunAllData)*DEF_SYS_ARMS_NUMS);
+      free(mSendDatas);
+      break;
+    }
     default:
     {
       break;
@@ -288,6 +356,12 @@ static int sendCycLiftDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mC
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+/******************************************************************************
+* 功能：线程入口函数，此模块的生命周期就在此函数中。
+* @param pTModule : pTModule是线程信息指针，里边包含发送/接收消息，socket等信息
+* @param mCmdCyc  : mCmdCyc是循环读取周期数据cmd命令
+* @return Descriptions
+******************************************************************************/
 void* threadEntry(void* pModule)
 {
   BASE::INTERACTION_THREAD_INFO *pTModule =(BASE::INTERACTION_THREAD_INFO *) pModule;
@@ -295,13 +369,16 @@ void* threadEntry(void* pModule)
   {
     return 0;
   }
+  //设置此线程的cpu亲和度
   BASE::hiSetCpuAffinity(pTModule->mCpuAffinity);
 
+  //log打印队列锁
   mPrintQueueMutex = pTModule->mPrintQueueMutex;
 
   //read conf
   readConfig(mParames);
 
+  //初始化模块
   if(initServer(pTModule) != 0)
   {
     LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction  bind server ip failed, check network again !");
@@ -312,15 +389,18 @@ void* threadEntry(void* pModule)
 
   socklen_t mun = sizeof(pTModule->mPeerAddr);
 
-  //running state
+  //线程运行起初设置配置状态
   pTModule->mState = BASE::M_STATE_CONF;
 
   LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction running!");
+
+  //线程陷入循环
   while(pTModule->mWorking)
   {
-    //rec UDP************TODU
+    //接收上位机指令，如没有指令，阻塞一定时间。
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::MArmsDownData), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-    //TODU
+
+    //接收上位机指令，如没有指令，阻塞一定时间。
     switch (pTModule->mRecMsg.CmdIdentify)
     {
       case BASE::CMD_LINK:
@@ -372,12 +452,12 @@ void* threadEntry(void* pModule)
       case BASE::CMD_CYC_READ_LIFT_DATAS:
       {
         if(pTModule->mState == BASE::M_STATE_CONF)
-            sendCycLiftDatas(pTModule, BASE::CMD_CYC_READ_LIFT_DATAS);
+            sendCycDatas(pTModule, BASE::CMD_CYC_READ_LIFT_DATAS);
         break;
       }
       case BASE::CMD_CYC_READ_SYS_DELAYED:
       {
-        sendCycLiftDatas(pTModule, BASE::CMD_CYC_READ_SYS_DELAYED);
+        sendCycDatas(pTModule, BASE::CMD_CYC_READ_SYS_DELAYED);
         break;
       }
       case BASE::CMD_HAND_MOVE_STOP:
@@ -440,6 +520,7 @@ void* threadEntry(void* pModule)
       }
       case BASE::CMD_CYC_READ_RUNNING_DATAS:
       {
+        sendCycDatas(pTModule, BASE::CMD_CYC_READ_RUNNING_DATAS);
         printf("interaction CMD run start\n");
         break;
       }
@@ -473,6 +554,7 @@ void* threadEntry(void* pModule)
       }
     }
 
+    //每个循环周期结束后，将msg置空
     memset((char*)&(pTModule->mRecMsg), 0, sizeof(BASE::MArmsDownData));
   }
 
