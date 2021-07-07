@@ -32,7 +32,7 @@
 
 namespace SUPR {
 
-//struct for modules
+//模块结构体，线程名字，入口函数，pid
 typedef struct _MODULEINFOS
 {
   const char* mName;
@@ -43,7 +43,7 @@ typedef struct _MODULEINFOS
 
 //thread parame
 BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_USE_ARMS_NUMS];
-BASE::TENSIONS_THREAD_INFO mArmsTension[DEF_SYS_TENSIONLEADER_NUMS];
+BASE::TENSIONS_THREAD_INFO mArmsTension[DEF_SYS_MAX_TENSIONLEADER_NUMS];
 BASE::LOG_THREAD_INFO  mlogsModule;
 
 
@@ -69,7 +69,7 @@ static BASE::STR_QUEUE *mArmsDataLogQueue = NULL;
 
 //arms,tensions,logs threads and supr
 MODULEINFOS gHiMInfo[MODULES_NUMS];
-BASE::ARMS_MSGS mArmsMsgs;
+
 
 static int suprWorking = 1;
 
@@ -105,6 +105,10 @@ static BASE::M_STATE mSysState = BASE::M_STATE_INIT;
  *
  * Documentation/power/pm_qos_interface.txt
  */
+/******************************************************************************
+* 功能：设置电源管理策略，此模块比避免cpu进入节能模式，影响定时器精度
+* @return Descriptions
+******************************************************************************/
 static void set_latency_target(void)
 {
     struct stat s;
@@ -134,6 +138,10 @@ static void set_latency_target(void)
     LOGER::PrintfLog(BASE::S_APP_LOGER, "# /dev/cpu_dma_latency set to %dus", latency_target_value);
 }
 
+/******************************************************************************
+* 功能：创建循环队列
+* @return Descriptions
+******************************************************************************/
 static BASE::STR_QUEUE * qCreate(void)
 {
   BASE::STR_QUEUE *q = (BASE::STR_QUEUE*)malloc(sizeof(BASE::STR_QUEUE));	// 分配一个队列空间
@@ -146,6 +154,11 @@ static BASE::STR_QUEUE * qCreate(void)
   return q;
 }
 
+/******************************************************************************
+* 功能：tsnorm函数将timespec中的纳秒，妙格式化。按照1m = 1000000000ns，
+* @param ts : ts是时间结构体，包含：妙 纳秒
+* @return Descriptions
+******************************************************************************/
 static inline void tsnorm(struct timespec *ts)
 {
     while (ts->tv_nsec >= NSEC_PER_SEC) {
@@ -154,6 +167,12 @@ static inline void tsnorm(struct timespec *ts)
     }
 }
 
+/******************************************************************************
+* 功能：计算两个时间差
+* @param t1 : t1是时间结构体，包含：妙 纳秒
+* @param t2 : t2是时间结构体，包含：妙 纳秒
+* @return Descriptions
+******************************************************************************/
 static inline int64_t calcdiff_ns(struct timespec t1, struct timespec t2)
 {
     int64_t diff;
@@ -162,6 +181,10 @@ static inline int64_t calcdiff_ns(struct timespec t1, struct timespec t2)
     return diff;
 }
 
+/******************************************************************************
+* 功能：初始化整个系统的运行环境
+* @return Descriptions
+******************************************************************************/
 static int32_t prepareEnv(void) {
   int32_t iRet = 0;
   printf("ARMS APP STARTING\n");
@@ -176,6 +199,10 @@ static int32_t prepareEnv(void) {
   return iRet;
 }
 
+/******************************************************************************
+* 功能：初始化supr变量
+* @return Descriptions
+******************************************************************************/
 static int32_t initSupr(void) {
   //need handler error case
   int32_t iRet = 0;
@@ -212,11 +239,18 @@ static int32_t initSupr(void) {
   return iRet;
 }
 
+/******************************************************************************
+* 功能：修改supr线程优先级
+* @return Descriptions
+******************************************************************************/
 static void changeSuprThreadInfo(void) {
   BASE::hiSetThreadsched(pthread_self(), CONF::PRI_SUPR);
 }
 
-
+/******************************************************************************
+* 功能：各个线程模块初始化，并且启动个各模块线程
+* @return Descriptions
+******************************************************************************/
 static int32_t startModules(void) {
   //need handler error case
   int32_t qIdx = CONF::ARMS_M_SUPR_ID;
@@ -288,8 +322,6 @@ static int32_t startModules(void) {
     mArmsTension[qIdx].mPrintQueueMutex = &mPrintQueueMutex;
     mArmsTension[qIdx].mCpuAffinity  = CONF::CPU_TENSION;
   }
-
-
   for (qIdx = CONF::ARMS_T_1_ID; qIdx < CONF::ARMS_T_MAX_ID; qIdx++)
   {
     gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_TENSION_NAME[qIdx-CONF::ARMS_T_1_ID],
@@ -302,7 +334,10 @@ static int32_t startModules(void) {
   return 0;
 }
 
-
+/******************************************************************************
+* 功能：检查leader线程模块是否在运行
+* @return Descriptions
+******************************************************************************/
 static void checkArmsWorking()
 {
   uint16_t mArmsWorkingBits = 0;
@@ -319,7 +354,7 @@ static void checkArmsWorking()
   {
     suprWorking = 0;
     //stop tensions
-    for (int qIdx = 0; qIdx < DEF_SYS_TENSIONLEADER_NUMS; qIdx++)
+    for (int qIdx = 0; qIdx < DEF_SYS_USE_TENSIONLEADER_NUMS; qIdx++)
       mArmsTension[qIdx].mWorking = false;
     //stop interaction
     mManInteraction.mWorking = false;
@@ -371,6 +406,10 @@ static void handleArmsCrossing()
     mArmsModule[i].mNewRecMsg = false;
 }
 
+/******************************************************************************
+* 功能：supr线程处理上位机显示线程发来的cmd命令
+* @return Descriptions
+******************************************************************************/
 static void handleInteractionCmd()
 {
   //new cmd from interaction
@@ -410,7 +449,7 @@ static void handleInteractionCmd()
           {
             BASE::MoveLiftAllData *mAllMove = (BASE::MoveLiftAllData *)mmRecMsg.Datas;
             //copy move to leaders
-            for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+            for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
             {
                 if(mAllMove[i].mIsValid)
                 {
@@ -438,7 +477,7 @@ static void handleInteractionCmd()
           {
             BASE::PullLiftAllData *mAllPull = (BASE::PullLiftAllData *)mmRecMsg.Datas;
             //copy move to leaders
-            for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+            for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
             {
                 if(mAllPull[i].mIsValid)
                 {
@@ -490,6 +529,10 @@ static void handleInteractionCmd()
 
 }
 
+/******************************************************************************
+* 功能：改变系统运行状态
+* @return Descriptions
+******************************************************************************/
 static void changeState()
 {
   switch (mSysState)
@@ -558,6 +601,10 @@ static void changeState()
 
 }
 
+/******************************************************************************
+* 功能：supr线程陷入函数，周期性的控制leader等线程运行
+* @return Descriptions
+******************************************************************************/
 static int32_t suprMainLoop(){
   //TODU
   struct timespec now, next, interval;
@@ -627,6 +674,10 @@ static int32_t suprMainLoop(){
   }
 }
 
+/******************************************************************************
+* 功能：按键中断函数，ctrl+c结束系统运行
+* @return Descriptions
+******************************************************************************/
 static void signalHandle(int mSignal)
 {
   //mSysState = BASE::M_STATE_STOP;
@@ -638,6 +689,10 @@ static void signalHandle(int mSignal)
   printf("oops! stop!!!\n");
 }
 
+/******************************************************************************
+* 功能：释放、销毁线程资源
+* @return Descriptions
+******************************************************************************/
 static int32_t deInitSupr(void)
 {
   int32_t iRet = 0;
@@ -679,6 +734,10 @@ void clientTest()
 //TUDO
 }
 
+/******************************************************************************
+* 功能：系统入口函数，main函数调用
+* @return Descriptions
+******************************************************************************/
 int32_t dmsAppStartUp() {
   int32_t iRet = 0;
 
@@ -694,7 +753,7 @@ int32_t dmsAppStartUp() {
     pthread_join(gHiMInfo[qIdx].mPid, NULL);
   }
 
-  for (qIdx = CONF::ARMS_T_1_ID; qIdx < DEF_SYS_TENSIONLEADER_NUMS+CONF::ARMS_T_1_ID; qIdx++) {
+  for (qIdx = CONF::ARMS_T_1_ID; qIdx < DEF_SYS_USE_TENSIONLEADER_NUMS+CONF::ARMS_T_1_ID; qIdx++) {
     LOGER::PrintfLog(BASE::S_APP_LOGER, "live until re-program qIdx=%d", qIdx);
     pthread_join(gHiMInfo[qIdx].mPid, NULL);
   }

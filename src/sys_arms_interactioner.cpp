@@ -26,7 +26,7 @@
 #include "sys_arms_daemon.hpp"
 
 
-static BASE::ReadConfData mParames[DEF_SYS_ARMS_NUMS] = {0};
+static BASE::ReadConfData mParames[DEF_SYS_MAX_ARMS_NUMS] = {0};
 
 namespace INTERACTIONER {
 
@@ -139,7 +139,7 @@ static int readConfig(BASE::ReadConfData * mParame)
       return  -1;
     }
 
-    for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+    for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
     {
       fprintf(pFile, "%f %f %f %f %f %f\n", CONF::IN_MAX_TENSION[i], CONF::IN_OFFSET_X[i], CONF::IN_OFFSET_Y[i], CONF::IN_OFFSET_Z[i], CONF::IN_OFFSET_W[i], CONF::IN_OFFSET_ANGLE[i]);
       mTParame->mConfSaveWeight = CONF::IN_MAX_TENSION[i];
@@ -154,8 +154,8 @@ static int readConfig(BASE::ReadConfData * mParame)
     return 0;
   }
 
-  memset((char*)mTParame, 0, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
-  for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+  memset((char*)mTParame, 0, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
+  for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
   {
 
     fscanf(pFile, "%f %f %f %f %f %f\n",
@@ -192,7 +192,7 @@ static int writeConfig(BASE::SaveConfData * sParame, const int mPNum)
     return -1;
 
   readConfig(mParames);
-  for (int i=0; i<DEF_SYS_ARMS_NUMS;i++)
+  for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS;i++)
   {
       if(sParame[i].mIsValid == 1)
       {
@@ -324,25 +324,25 @@ static int sendCycDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmdCy
     }
     case BASE::CMD_CYC_READ_SYS_DELAYED:
     {
-      BASE::ReadLiftHzData *mSendDatas = (BASE::ReadLiftHzData *)malloc(sizeof(BASE::ReadLiftHzData)*DEF_SYS_ARMS_NUMS);
+      BASE::ReadLiftHzData *mSendDatas = (BASE::ReadLiftHzData *)malloc(sizeof(BASE::ReadLiftHzData)*DEF_SYS_MAX_ARMS_NUMS);
       pthread_mutex_lock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
-      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadLiftHzDatas, sizeof(BASE::ReadLiftHzData)*DEF_SYS_ARMS_NUMS);
+      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadLiftHzDatas, sizeof(BASE::ReadLiftHzData)*DEF_SYS_MAX_ARMS_NUMS);
       pthread_mutex_unlock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
 
       printf("delayed\n");
-      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_DELAYED_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadLiftHzData)*DEF_SYS_ARMS_NUMS);
+      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_DELAYED_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadLiftHzData)*DEF_SYS_MAX_ARMS_NUMS);
       free(mSendDatas);
       break;
     }
     case BASE::CMD_CYC_READ_RUNNING_DATAS:
     {
-      BASE::ReadRunAllData *mSendDatas = (BASE::ReadRunAllData *)malloc(sizeof(BASE::ReadRunAllData)*DEF_SYS_ARMS_NUMS);
+      BASE::ReadRunAllData *mSendDatas = (BASE::ReadRunAllData *)malloc(sizeof(BASE::ReadRunAllData)*DEF_SYS_MAX_ARMS_NUMS);
       pthread_mutex_lock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
-      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadRunDatas, sizeof(BASE::ReadRunAllData)*DEF_SYS_ARMS_NUMS);
+      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadRunDatas, sizeof(BASE::ReadRunAllData)*DEF_SYS_MAX_ARMS_NUMS);
       pthread_mutex_unlock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
 
       printf("run data\n");
-      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_RUNNING_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadRunAllData)*DEF_SYS_ARMS_NUMS);
+      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_RUNNING_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadRunAllData)*DEF_SYS_MAX_ARMS_NUMS);
       free(mSendDatas);
       break;
     }
@@ -412,9 +412,9 @@ void* threadEntry(void* pModule)
 
         printf("interaction CMD link\n");
         //TUDO  send msg to arms concl
-        memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
+        memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
         readConfig(mParames);
-        sendMsgToUpper(pTModule, BASE::CMD_ACK_LINK_OK, 0, (char*)mParames, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_LINK_OK, 0, (char*)mParames, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
         break;
       }
       case BASE::CMD_UNLINK:
@@ -431,16 +431,16 @@ void* threadEntry(void* pModule)
       case BASE::CMD_SAVE_CONF:
       {
         //BASE::SaveConfData *mSavaConf = (BASE::SaveConfData *)pTModule->mRecMsg.Datas;
-        writeConfig((BASE::SaveConfData *)pTModule->mRecMsg.Datas, DEF_SYS_ARMS_NUMS);
+        writeConfig((BASE::SaveConfData *)pTModule->mRecMsg.Datas, DEF_SYS_MAX_ARMS_NUMS);
         printf("interaction CMD Sava conf\n");
         break;
       }
       case BASE::CMD_READ_CONF:
       {
-        memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
+        memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
         readConfig(mParames);
         printf("interaction CMD read conf\n");
-        sendMsgToUpper(pTModule, BASE::CMD_ACK_READCONF_OK, 0, (char*)mParames, sizeof(BASE::ReadConfData)*DEF_SYS_ARMS_NUMS);
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_READCONF_OK, 0, (char*)mParames, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
         break;
       }
       case BASE::CMD_HAND_MOVE_START:
@@ -486,7 +486,7 @@ void* threadEntry(void* pModule)
         {
             //tension turn kg
             BASE::PullLiftAllData *mAllPull = (BASE::PullLiftAllData *)pTModule->mRecMsg.Datas;
-            for (int i=0; i<DEF_SYS_ARMS_NUMS; i++)
+            for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
             {
                 if(mAllPull[i].mIsValid)
                     mAllPull[i].mHandPull *= ((mParames[i].mConfSaveWeight)/100.0);

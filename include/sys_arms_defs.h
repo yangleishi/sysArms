@@ -32,7 +32,7 @@ namespace BASE {
 //////////////////////////////////// System internal structure  /////////////////////////////////////
 
 ////////////////////////////////////
-//DEFINE THREAD running state
+//定义线程模块运行的状态
 typedef enum
 {
   M_STATE_INIT = 0,
@@ -42,7 +42,7 @@ typedef enum
   M_STATE_QUIT,
 } M_STATE;
 
-//DEFINE THREAD ack state
+//定义线程模块应答的状态
 typedef enum
 {
   ACK_STATE_NULL = 100,
@@ -50,7 +50,7 @@ typedef enum
 } ACK_STATE;
 
 //for log part/////////////
-//Define
+//日志模块需要记录系统log或机械臂运行数据
 typedef enum
 {
   S_APP_LOGER = 0,
@@ -194,8 +194,6 @@ const uint16_t   IN_CONF_READ_PARAMS    = IN_BASE + 2;
 
 const uint16_t   IN_CONF_MOVE           = IN_BASE + 3;  // 0-15 modules ,16-31 X Y Z W motors move
 
-
-
 //Define the states upper <<= interactioner
 const uint16_t   IN_KNOCK_DOOR_OK          = IN_BASE + 100;  //first msg interactioner to upper
 const uint16_t   IN_KNOCK_DOOR_FILED       = IN_BASE + 101;  //first msg interactioner to upper
@@ -207,11 +205,13 @@ const uint16_t   IN_CONF_CONFIGURE_OK      = IN_BASE + 102;
 
 
 ////////////////////////////////////printf queue /////////////////////////////////////
+//定义log打印保存字符串
 typedef struct
 {
   char  mString[PRINT_STRING_MAX_LENGTH];
 } PRINT_STR;
 
+//定义log打印保存循环队列
 typedef struct
 {
   PRINT_STR mPrintPond[PRINT_QUEUE_MAX_ITEMS];	// 循环队列的缓冲区
@@ -220,7 +220,7 @@ typedef struct
 } STR_QUEUE;
 
 ///////////////////////////////////
-//Motor control datas
+//定义电机控制结构体
 typedef struct
 {
   //ctrl motors data
@@ -230,16 +230,15 @@ typedef struct
 } MOTOR_CTRL;
 
 
-//Motor control datas
+//定义机械臂4组电机控制
 typedef struct
 {
   //four motors data
   MOTOR_CTRL mMotorsCmd[4];
 } MOTORS;
 
-
 ///////////////////////////////////
-//Time
+//定义时间戳
 typedef struct
 {
   uint32_t   mSysTimeS;
@@ -248,7 +247,7 @@ typedef struct
 
 
 ///////////////////////////////////
-
+//定义机械臂控制板传输消息头
 typedef struct
 {
   //frame unique dev 0-10
@@ -270,7 +269,7 @@ typedef struct
   uint16_t   mDataLength;
 } MSG_HEARDER;
 
-// UDP, send control data structure. 11 arms
+//定义机械臂控制板发送消息
 typedef struct: public MSG_HEARDER
 {
   //ctrl motors data
@@ -281,7 +280,7 @@ typedef struct: public MSG_HEARDER
   uint8_t   mCrcCodeL;
 } ARMS_S_MSG;
 
-// UDP, send control data structure tensions
+//定义无线拉力计控制板发送消息
 typedef struct: public MSG_HEARDER
 {
   //ctrl tensions start/stop data. 0 1
@@ -292,7 +291,7 @@ typedef struct: public MSG_HEARDER
 } TENSIONS_S_MSG;
 
 ///////////////////////////////////
-//Motor rec datas
+//定义单个电机接收数据结构体
 typedef struct
 {
   //rec motors datas
@@ -303,7 +302,7 @@ typedef struct
   uint64_t   mEncoder;
 } MOTOR_REC_DATAS;
 
-// UDP, rec data structure. 11 arms
+//定义机械臂控制板接收消息
 typedef struct: public MSG_HEARDER
 {
 //****************************  rec Datas  ***********************************//
@@ -327,7 +326,6 @@ typedef struct: public MSG_HEARDER
   uint8_t   mEncoderStateCode;
   uint32_t  mEncoders;
 
-
   //四个电机数据
   MOTOR_REC_DATAS mMotors[4];
 
@@ -340,7 +338,7 @@ typedef struct: public MSG_HEARDER
   uint8_t   mCrcCodeL;
 } ARMS_R_MSG;
 
-//tensions. 6 float data
+//定义无线拉力计控制板接收消息
 typedef struct
 {
   //frame start 0x1ACF
@@ -370,7 +368,7 @@ typedef struct
 } TENSIONS_R_MSG;
 
 
-//tensions. float data.leader use the value
+//定义无线拉力计传输给leader数据
 typedef struct
 {
   float   mTensions;
@@ -378,7 +376,7 @@ typedef struct
 } TENSIONS_NOW_DATA;
 
 ///////////////////////////////////
-/******************************************interaction data structure***************************************/
+/******************************************人机界面***************************************/
 //////////////////////interaction控制指令//////////////
 const uint16_t  CMD_BASE = 0;
 const uint16_t  CMD_LINK = CMD_BASE + 1;
@@ -398,13 +396,13 @@ const uint16_t  CMD_RUN_STOP_E = CMD_BASE + 13;
 const uint16_t  CMD_QUIT = CMD_BASE + 14;
 
 
-//cycly read datas
+//上位机循环读取显示数据命令
 const uint16_t  CMD_CYC_READ_SYS_DELAYED = CMD_BASE + 15;
 const uint16_t  CMD_CYC_READ_LIFT_DATAS = CMD_BASE + 16;
 const uint16_t  CMD_CYC_READ_RUNNING_DATAS = CMD_BASE + 17;
 const uint16_t  CMD_CYC_READ_SHOWDE_DATAS = CMD_BASE + 18;
 
-//leader run state
+//上位机发送控制，使得app运行状态
 const uint16_t  ST_HAND_MOVE_RUNNING = CMD_BASE + 50;
 const uint16_t  ST_ALL_MOVE_RUNNING = CMD_BASE + 51;
 const uint16_t  ST_ALL_PULL_RUNNING = CMD_BASE + 52;
@@ -437,28 +435,28 @@ const uint16_t  CMD_TYPE_BASE = 0;
 //上传数据发送的最大数据char
 #define MSG_UP_DATA_MAX  1000
 /////////////////////////////////////////////////rec interactions/////////////////////////////////////
+//上位机发送给app的消息
 typedef struct
 {
-    //*******************16位CtrlWord******************************************/
-    uint16_t   CmdIdentify;
-    //*******************数据段**********************/
-    //下发的数据
-    char Datas[MSG_DOWN_DATA_MAX];
-    //*******************序列码、随机码、保留位**********************/
-    uint16_t CRC;
+  //16位CtrlWord
+  uint16_t   CmdIdentify;
+  //数据段
+  char Datas[MSG_DOWN_DATA_MAX];
+  //序列码、随机码、保留位
+  uint16_t CRC;
 }MArmsDownData;
 
 ///////////////////////上传数据////////////////////////
+//app发送给上位机显示的消息
 typedef struct
 {
-    //*******************16位stateWord******************************************/
+    //16位stateWord
     uint16_t   StatusWord;
-    //*******************16位stateCode******************************************/
+    //16位stateCode
     uint16_t   StatusCode;
-    //*******************数据段**********************/
-    //下发的数据
+    //数据段
     char Datas[MSG_UP_DATA_MAX];
-    //*******************序列码、随机码、保留位**********************/
+    //序列码、随机码、保留位
     uint16_t CRC;
 }MArmsUpData;
 
@@ -568,6 +566,7 @@ typedef struct{
 
 
 //interaction cmd datas to supr
+//人机交互线程发送给supr线程的data
 typedef struct{
   int            mIsNewRec;
   int            mIsNewSend;
@@ -579,24 +578,16 @@ typedef struct{
 } InteractionDataToSupr;
 
 //interaction. supr to interaction
-
+//supr传输给人机交互线程的数据，机械臂运行数据
 typedef struct{
   BASE::ReadLiftSigalNowData  mReadLiftNowDatas[DEF_SYS_USE_ARMS_NUMS];
-  BASE::ReadLiftHzData        mReadLiftHzDatas[DEF_SYS_ARMS_NUMS];
-  BASE::ReadRunAllData        mReadRunDatas[DEF_SYS_ARMS_NUMS];
+  BASE::ReadLiftHzData        mReadLiftHzDatas[DEF_SYS_MAX_ARMS_NUMS];
+  BASE::ReadRunAllData        mReadRunDatas[DEF_SYS_MAX_ARMS_NUMS];
   pthread_mutex_t             mArmsNowDatasMutex;
 } SuprDataToInteraction;
 
-/////////////////////////////////sys //////////////////////////////////////////////
-//TODU
-typedef struct
-{
-  ARMS_R_MSG mArmsMsgs[DEF_SYS_USE_ARMS_NUMS];
-  M_STATE  mArmsState[DEF_SYS_USE_ARMS_NUMS];
-} ARMS_MSGS;
-
-////////////////////////////////////
-//  Each thread runs parameters
+/////////////////////////////////整个系统中线程定义 //////////////////////////////////////////////
+//线程结构体头，线程运行期间必须的参数 Each thread runs parameters
 typedef struct
 {
   bool         mWorking;
@@ -618,7 +609,7 @@ typedef struct
   int         mCpuAffinity;
 } THREAD_INFO_HEADER;
 
-//loger thread info
+//日志线程结构体信息loger thread info
 typedef struct
 {
   bool         mWorking;
@@ -636,7 +627,7 @@ typedef struct
 } LOG_THREAD_INFO;
 
 
-//11 arms thread info
+//11个机械臂线程信息 11 arms thread info
 typedef struct: public THREAD_INFO_HEADER
 {
   ACK_STATE       mAckState;
@@ -662,19 +653,19 @@ typedef struct: public THREAD_INFO_HEADER
   ReadLiftHzData        mReadLiftHzData;
   ReadRunAllData        mReadRunData;
 
-
+  //无线数据传输模块，如果不使用无线模块，此值在MArmsUpData中
   TENSIONS_NOW_DATA   *mNowTension;
 
 } ARMS_THREAD_INFO;
 
-//tensions thread info
+//拉力计线程信息 tensions thread info
 typedef struct: public THREAD_INFO_HEADER
 {
   TENSIONS_NOW_DATA   *mNowTension;
 } TENSIONS_THREAD_INFO;
 
 
-//interaction thread info
+//人机交互线程信息 interaction thread info
 typedef struct: public THREAD_INFO_HEADER
 {
   bool      mIsStataChange;
@@ -688,6 +679,7 @@ typedef struct: public THREAD_INFO_HEADER
 
 }INTERACTION_THREAD_INFO;
 
-}  //namespace
+
+}//namespace
 
 #endif // SYS_ARMS_DEFS_H

@@ -312,7 +312,10 @@ static int32_t checkHardError(uint16_t mStatusCode)
 ******************************************************************************/
 static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule, int devInt)
 {
-  return  pTModule->mNowTension[devInt].iNewTensions ? pTModule->mNowTension[devInt].mTensions : -1.0;
+  float iRet = -1;
+  //如果DEF_SYS_USE_TENSIONLEADER_NUMS=0 则不采用无线模块，拉力计信息在RecMsg里边，否则拉力计信息需要无线模块传输。
+  iRet = ((DEF_SYS_USE_TENSIONLEADER_NUMS == 0) ? iRet = pTModule->mRecMsg.mTension : pTModule->mNowTension[devInt].mTensions);
+  return  iRet;
 }
 
 
@@ -549,7 +552,12 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
   return iRet;
 }
 
-//TUDU
+/******************************************************************************
+* 功能：机械臂周期运行的数据需要leader拷贝到supr线程中，然后interaction在从supr中发送给上位机显示
+* @param mRecMsg : mRecMsg是接收到控制板发来的数据，包含机械臂运行时候的各种传感器数据
+* @param mRunDatas : mRunDatas是机械臂运行数据结构体，发送到上位机显示的
+* @return Descriptions
+******************************************************************************/
 static uint16_t copyArmsRunDatas(BASE::ARMS_R_MSG mRecMsg, BASE::ReadRunAllData &mRunDatas)
 {
   mRunDatas.mIsValid = 1;
@@ -567,6 +575,11 @@ static uint16_t copyArmsRunDatas(BASE::ARMS_R_MSG mRecMsg, BASE::ReadRunAllData 
   mRunDatas.runD_RencoderZNow = mRecMsg.mMotors[2].mEncoder;
 }
 
+/******************************************************************************
+* 功能：机械臂在运行模式下周期调用的函数，包含系统检测，控制命令发送，运动数据拷贝等
+* @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针等
+* @return Descriptions
+******************************************************************************/
 static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
@@ -646,7 +659,11 @@ static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule)
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-
+/******************************************************************************
+* 功能：线程入口函数，此模块的生命周期就在此函数中。
+* @param pTModule : pTModule是线程信息指针，里边包含发送/接收消息，socket等信息
+* @return Descriptions
+******************************************************************************/
 void* threadEntry(void* pModule)
 {
   BASE::ARMS_THREAD_INFO *pTModule =(BASE::ARMS_THREAD_INFO *) pModule;

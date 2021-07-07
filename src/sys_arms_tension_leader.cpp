@@ -34,11 +34,18 @@ static int  initServer(BASE::TENSIONS_THREAD_INFO *pTModule);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 static int moduleEndUp(BASE::TENSIONS_THREAD_INFO *pTModule);
 
-static int motorCmd(BASE::TENSIONS_THREAD_INFO *pTModule, uint8_t mCmd);
+static int tensionCmd(BASE::TENSIONS_THREAD_INFO *pTModule, uint8_t mCmd);
 static int packageFrame(BASE::TENSIONS_S_MSG* pMsg, uint8_t mCmd);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+/******************************************************************************
+* 功能：设置fd套接字非阻塞模式下延时
+* @param sockfd : sockfd是socket套接字
+* @param mSec : mSec是阻塞延时 妙
+* @param mUsec : mUsec是阻塞延时微妙
+* @return Descriptions
+******************************************************************************/
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
 {
   struct timeval timeout;
@@ -50,7 +57,11 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
   }
 }
 
-
+/******************************************************************************
+* 功能：初始化函数，tension作为服务器端，一直接收拉力计信息
+* @param pTModule : pTModule是线程信息
+* @return Descriptions
+******************************************************************************/
 static int initServer(BASE::TENSIONS_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
@@ -76,11 +87,15 @@ static int initServer(BASE::TENSIONS_THREAD_INFO *pTModule)
   return 0;
 }
 
-
+/******************************************************************************
+* 功能：模块释放函数，线程结束时调用此函数
+* @param pTModule : pTModule是线程信息
+* @return Descriptions
+******************************************************************************/
 static int moduleEndUp(BASE::TENSIONS_THREAD_INFO *pTModule)
 {
   //stop rec
-  motorCmd(pTModule, 1);
+  tensionCmd(pTModule, 1);
 
   if(pTModule->mSocket >= 0)
   {
@@ -93,6 +108,12 @@ static int moduleEndUp(BASE::TENSIONS_THREAD_INFO *pTModule)
 
 //TUDO
 ///msg functions/////////////////
+/******************************************************************************
+* 功能：组包函数，下发到拉力计模块
+* @param pMsg : pMsg是拉力计发送消息
+* @param mCmd : mCmd是控制命令
+* @return Descriptions
+******************************************************************************/
 static int packageFrame(BASE::TENSIONS_S_MSG* pMsg, uint8_t mCmd)
 {
   int32_t iRet = 0;
@@ -115,8 +136,13 @@ static int packageFrame(BASE::TENSIONS_S_MSG* pMsg, uint8_t mCmd)
   return iRet;
 }
 
-
-static int motorCmd(BASE::TENSIONS_THREAD_INFO *pTModule, uint8_t mCmd)
+/******************************************************************************
+* 功能：拉力计下发送控制指令函数
+* @param pTModule : pTModule是线程信息，包含收发拉力计消息
+* @param mCmd : mCmd是控制命令
+* @return Descriptions
+******************************************************************************/
+static int tensionCmd(BASE::TENSIONS_THREAD_INFO *pTModule, uint8_t mCmd)
 {
   int32_t iRet = 0;
   packageFrame(&mSendTensionMsg,  mCmd);
@@ -126,6 +152,11 @@ static int motorCmd(BASE::TENSIONS_THREAD_INFO *pTModule, uint8_t mCmd)
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+/******************************************************************************
+* 功能：线程入口函数，此模块的生命周期就在此函数中。
+* @param pTModule : pTModule是线程信息指针，里边包含发送/接收消息，socket等信息
+* @return Descriptions
+******************************************************************************/
 void* threadEntry(void* pModule)
 {
   BASE::TENSIONS_THREAD_INFO *pTModule =(BASE::TENSIONS_THREAD_INFO *) pModule;
@@ -182,7 +213,7 @@ void* threadEntry(void* pModule)
     if(bFirstRec)
     {
       //start send msg. 0 :start.  1: stop
-      motorCmd(pTModule, 0);
+      tensionCmd(pTModule, 0);
       bFirstRec = 0;
       continue;
     }

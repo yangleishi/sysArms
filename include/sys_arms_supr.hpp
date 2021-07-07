@@ -25,8 +25,6 @@ namespace SUPR
 
   int32_t dmsAppStartUp(void);
 
-  //data param
-  extern BASE::ARMS_MSGS mArmsMsgs;
 } // namespace
 
 

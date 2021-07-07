@@ -19,7 +19,17 @@ server client的IP和port
 
 namespace CONF {
 
+//最大可以使用的机械臂leader数量
+#define DEF_SYS_MAX_ARMS_NUMS 11
+//系统中使用的机械臂leader数量
+#define DEF_SYS_USE_ARMS_NUMS 1
 
+//最大可以使用的拉力计接收模块数量
+#define DEF_SYS_MAX_TENSIONLEADER_NUMS 2
+//系统中使用的拉力计接收模块数量，0时候采用有线传输（拉力计信息在有线传输协议里）
+#define DEF_SYS_USE_TENSIONLEADER_NUMS 2
+
+//系统中所有线程模块ID
 typedef enum {
   ARMS_M_SUPR_ID = 0, /*0 is special one, don't change it */
   ARMS_M_1_ID = 1,
@@ -37,7 +47,7 @@ typedef enum {
 
   ARMS_T_1_ID = 12,
   ARMS_T_2_ID,
-  ARMS_T_MAX_ID,
+  ARMS_T_MAX_ID = ARMS_M_MAX_ID  + DEF_SYS_USE_TENSIONLEADER_NUMS,
 
   ARMS_INTERACTION_ID = 14,
   ARMS_INTERACTION_MAX_ID,
@@ -46,18 +56,10 @@ typedef enum {
   ARMS_LOG_MAX_ID,
 } MODULE_NAME_ID;
 
-
+//最大的线程模块数量
 #define MODULES_NUMS (CONF::ARMS_LOG_MAX_ID)
-//MN=Module Name
-//
-/*
- * arms size
- */
-#define DEF_SYS_ARMS_NUMS 11
-#define DEF_SYS_TENSIONLEADER_NUMS 2
-#define DEF_SYS_USE_ARMS_NUMS 1
 
-#define DEF_INTERACTION_TRANS_DATA_SIZE 2000
+//线程模块的名字
 const char MN_NAME[][15] = {"MN_SUPR", "MN_SERVER1", "MN_SERVER2",
                             "MN_SERVER3", "MN_SERVER4", "MN_SERVER5",
                             "MN_SERVER6", "MN_SERVER7", "MN_SERVER8",
@@ -68,13 +70,9 @@ const char MN_TENSION_NAME[][15] = {"MN_TENSION1", "MN_TENSION2"};
 const char MN_LOG_NAME[] = "MN_LOGS";
 
 const char MN_INTERACTION_NAME[] = "MN_INTERACTION";
-/*
-const char MN_SERVER_IP[][16] = {"127.0.0.0", "127.0.0.0", "127.0.0.0",
-                                 "127.0.0.0", "127.0.0.0", "127.0.0.0",
-                                 "127.0.0.0", "127.0.0.0", "127.0.0.0",
-                                 "127.0.0.0", "127.0.0.0", "127.0.0.0" };
-*/
 
+
+//线程模块使用的IP和端口
 const char MN_SERVER_IP[][16] = {"192.168.1.100", "192.168.1.100", "192.168.1.100",
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100",
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100",
@@ -89,52 +87,47 @@ const char MN_PEER_IP[][16] = {"192.168.1.2", "192.168.1.2", "192.168.1.2",
 
 const char MN_TENSION_SERVER_IP[][16] = {"192.168.1.100", "192.168.1.100"};
 
-const int  MN_SERVER_PORT[DEF_SYS_ARMS_NUMS + 1] = { 8001, 8002, 8003,
+const int  MN_SERVER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 8001, 8002, 8003,
                                                      8004, 8005, 8006,
                                                      8007, 8008, 8009,
                                                      8010, 8011, 8012};
-const int  MN_PEER_PORT[DEF_SYS_ARMS_NUMS + 1] = { 9001, 9002, 9003,
+const int  MN_PEER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 9001, 9002, 9003,
                                                      9004, 9005, 9006,
                                                      9007, 9008, 9009,
                                                      9010, 9011, 9012};
 
-const int  MN_TENSION_SERVER_PORT[DEF_SYS_TENSIONLEADER_NUMS + 1] = { 9001, 9002, 9003};
-
+const int  MN_TENSION_SERVER_PORT[DEF_SYS_MAX_TENSIONLEADER_NUMS] = { 9001, 9002};
 
 const char MN_INTERACTION_SERVER_IP[] = "192.168.1.100";
 const int  MN_INTERACTION_SERVER_PORT = 10001;
 
-
+//log日志保存的几个文件路径
 const char MN_INTERACTION_CONF_FILE[] = ".armsConf.conf";
 const char MN_LOGER_PRINTF_FILE[] = "sysArms.log";
 const char MN_ARMS_DATA_FILE[] = "sysArms.data";
 
 //*********////////// UDP timeout///////////////////
-//m us,arms ctrl
+//定义模块线程UDP接收消息超时
 const int SERVER_UDP_TIMEOUT_S = 0;
 const int SERVER_UDP_TIMEOUT_US = 5000;
-
-//m us rec tensions
 const int SERVER_UDP_TENSION_TIMEOUT_S = 1;
 const int SERVER_UDP_TENSION_TIMEOUT_US = 0;
-
-//m us rec interaction
 const int SERVER_UDP_INTERACTION_TIMEOUT_S = 1;
 const int SERVER_UDP_INTERACTION_TIMEOUT_US = 0;
 
-//Define priority for modules
+//定义线程模块优先级
 const int PRI_SUPR = 50;
 const int PRI_LEAD = 40;
 const int PRI_LOGER = 30;
 
-//Define modules CPU affinity
+//定义线程模块的CPU亲和度，绑定核
 const int CPU_SUPR = 1;
 const int CPU_LEAD = 2;
 const int CPU_LOGER = 3;
 const int CPU_TENSION = 4;
 const int CPU_INTERACTIONER = 5;
 
-//*********////////// interaction conf///////////////////
+//*********////////// 上位机线程 显示界面 配置数据interaction conf///////////////////
 const float  IN_MAX_TENSION[DEF_SYS_USE_ARMS_NUMS] = { 100 };
 const float  IN_OFFSET_X[DEF_SYS_USE_ARMS_NUMS] = { 0 };
 const float  IN_OFFSET_Y[DEF_SYS_USE_ARMS_NUMS] = { 0 };

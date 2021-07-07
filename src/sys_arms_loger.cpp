@@ -48,7 +48,11 @@ static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-
+/******************************************************************************
+* 功能：判断log消息队列是否为空
+* @param q : q是STR_QUEUE类型的指针，循环消息队列
+* @return Descriptions
+******************************************************************************/
 static bool qEmpty(BASE::STR_QUEUE *q)
 {
   bool iRet = true;
@@ -56,6 +60,11 @@ static bool qEmpty(BASE::STR_QUEUE *q)
   return iRet;
 }
 
+/******************************************************************************
+* 功能：判断log消息队列是否满
+* @param q : q是STR_QUEUE类型的指针，循环消息队列
+* @return Descriptions
+******************************************************************************/
 static bool qFull(BASE::STR_QUEUE *q)
 {
   bool iRet = true;
@@ -63,6 +72,12 @@ static bool qFull(BASE::STR_QUEUE *q)
   return iRet;
 }
 
+/******************************************************************************
+* 功能：消息队列中插入一个待打印的字符串
+* @param q : q是STR_QUEUE类型的指针，循环消息队列
+* @param pStr : pStr是待存储的字符串
+* @return Descriptions
+******************************************************************************/
 static bool qInsert(BASE::STR_QUEUE *q, char* pStr)
 {
   bool iRet = true;
@@ -76,6 +91,12 @@ static bool qInsert(BASE::STR_QUEUE *q, char* pStr)
   return iRet;
 }
 
+/******************************************************************************
+* 功能：消息队列中删除一个待打印的字符串
+* @param q : q是STR_QUEUE类型的指针，循环消息队列
+* @param pStr : pStr是存储的字符串
+* @return Descriptions
+******************************************************************************/
 static bool qDelete(BASE::STR_QUEUE *q, char* pStr)
 {
   if(qEmpty(q))
@@ -89,7 +110,11 @@ static bool qDelete(BASE::STR_QUEUE *q, char* pStr)
 
 
 ///////////////////////////////////
-
+/******************************************************************************
+* 功能：初始化消息队列
+* @param pTModule : pTModule是线程信息结构体
+* @return Descriptions
+******************************************************************************/
 static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule)
 {
   int32_t iRet = 0;
@@ -114,6 +139,11 @@ static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule)
   return iRet;
 }
 
+/******************************************************************************
+* 功能：释放消息队列申请的空间，删除锁
+* @param pTModule : pTModule是线程信息结构体
+* @return Descriptions
+******************************************************************************/
 static int moduleEndUp(BASE::LOG_THREAD_INFO *pTModule)
 {
   mPrintQueue = NULL;
@@ -134,6 +164,11 @@ static int moduleEndUp(BASE::LOG_THREAD_INFO *pTModule)
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+/******************************************************************************
+* 功能：线程入口函数，此模块的生命周期就在此函数中。
+* @param pTModule : pTModule是线程信息指针，里边包含发送/接收消息，socket等信息
+* @return Descriptions
+******************************************************************************/
 void* threadEntry(void* pModule)
 {
   BASE::LOG_THREAD_INFO *pTModule =(BASE::LOG_THREAD_INFO *) pModule;
@@ -182,6 +217,12 @@ void* threadEntry(void* pModule)
   moduleEndUp(pTModule);
 }
 
+/******************************************************************************
+* 功能：打印函数，此模块供其他线程使用，将log信息保存
+* @param mWhichLog : mWhichLog是选择要保存类型：app系统运行信息，arms运行数据
+* @param fm : fm是格式化类型
+* @return Descriptions
+******************************************************************************/
 void PrintfLog(BASE::LOG_SAVA_W mWhichLog, const char *fm, ...)
 {
   if(mPrintQueue == NULL)
