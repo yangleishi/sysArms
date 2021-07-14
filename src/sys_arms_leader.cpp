@@ -34,18 +34,18 @@ static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdNonblocking(int sockfd);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mStartSysTime, BASE::SYS_TIME  mEndSysTime);
-
+static void setStateCond(BASE::M_STATE_CONDITIONS &tCond, BASE::M_STATE tState, uint16_t tMotorCmd, int16_t  tCycTimes, uint16_t  tWaitAck);
 
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
 
 ///msg functions/////////////////
-static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors);
+static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t mIdentifier, uint16_t mMsgType, uint16_t mRandomCode, uint16_t mDataLength);
 
 static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg);
 static uint16_t copyArmsRunDatas(BASE::ARMS_R_MSG mRecMsg, BASE::ReadRunAllData &mRunDatas);
 static int32_t checkHardError(uint16_t mStatusCode);
 //pTmodule cmd or data send to client
-static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel);
+static int motorMoveAllCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl);
 static int motorMoveXYZCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel);
 
 static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors);
@@ -55,6 +55,7 @@ static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule, int devInt);
 //app running
 static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule);
 static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule);
+static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule);
 static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule);
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
@@ -126,8 +127,9 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
     return iRet;
 
   //powup motors
+  setStateCond(pTModule->mCond, BASE::M_STATE_INIT, BASE::CT_MOTOR_STOP, 100, 0);
   BASE::MOTORS mZeroMotors = {0};
-  motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_POWERON, 0, 0);
+  motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
   return 0;
 }
 
@@ -167,7 +169,7 @@ static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mS
 * @param mMotors : mMotors是消电机控制数据，组包到pMsg里
 * @return Descriptions
 ******************************************************************************/
-static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
+static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t mIdentifier, uint16_t mMsgType, uint16_t mRandomCode, uint16_t mDataLength)
 {
   int32_t iRet = 0;
   if(pMsg == NULL)
@@ -175,17 +177,23 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
 
   struct timespec now;
 
-  pMsg->mIdentifier = 0xFF;
+  pMsg->mIdentifier = mIdentifier;
+  pMsg->mMsgType    = mMsgType;
+  pMsg->mRandomCode = mRandomCode;
+  pMsg->mDataLength = mDataLength;
 
   memcpy((char*)&(pMsg->mMotors), (char*)&mMotors, sizeof(mMotors));
 
   clock_gettime(CLOCK_MONOTONIC, &now);
   pMsg->mSysTime.mSysTimeS  = now.tv_sec;
   pMsg->mSysTime.mSysTimeUs = now.tv_nsec/1000;
+
+  LOGER::PrintfLog(BASE::S_APP_LOGER, "send time(us) :%d", pMsg->mSysTime.mSysTimeUs);
   mSysSendTime.mSysTimeS = pMsg->mSysTime.mSysTimeS;
   mSysSendTime.mSysTimeUs = pMsg->mSysTime.mSysTimeUs;
 
   //TUDO
+
   pMsg->mCrcCodeH = 0;
   pMsg->mCrcCodeL = 0;
 
@@ -201,7 +209,7 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors)
 * @param mPosOrVel : mPosOrVel是电机位置控制，还是速度控制
 * @return Descriptions
 ******************************************************************************/
-static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel)
+static int motorMoveAllCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl)
 {
   int32_t iRet = 0;
 
@@ -209,12 +217,6 @@ static int motorMoveCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors,
   for(int i=0; i<4; i++)
   {
     mMotors.mMotorsCmd[i].mCmd = mCtrl;
-
-    if(mDirection)
-      mMotors.mMotorsCmd[i].mCmd |= (0x0100);
-
-    if(mPosOrVel)
-      mMotors.mMotorsCmd[i].mCmd |= (0x0200);
   }
   iRet = motorCmd(pTModule, mMotors);
 
@@ -261,7 +263,7 @@ static int motorMoveXYZCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMoto
 static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors)
 {
   int32_t iRet = 0;
-  packageFrame(&pTModule->mSendMsg,  mMotors);
+  packageFrame(&pTModule->mSendMsg,  mMotors, pTModule->mMsgId, BASE::M_TYPE_TO_CONTROLER_CMD, pTModule->mRandomCode++, 36);
   iRet = sendto(pTModule->mSocket, &pTModule->mSendMsg, sizeof(BASE::ARMS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
   return  iRet;
 }
@@ -277,14 +279,11 @@ static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors)
 static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg)
 {
   uint16_t iRet = 0;
-  uint16_t motorBit = 1;
   //check all start
   for(int i=0; i<4; i++)
   {
-    if(((mRecMsg.mMotors[i].mMotorStateCode>>1) % 2))
-      iRet |= motorBit;
-
-    motorBit << 1;
+    if(mRecMsg.mMotors[i].mMotorStateCode != BASE::ST_SYS_OK)
+      iRet ++;
   }
   return iRet;
 }
@@ -298,7 +297,7 @@ static uint16_t checkMotorsState(BASE::ARMS_R_MSG &mRecMsg)
 static int32_t checkHardError(uint16_t mStatusCode)
 {
   int32_t iRet = 0;
-  if(mStatusCode%2)
+  if(mStatusCode != BASE::ST_SYS_OK)
     iRet = 1;
   return iRet;
 }
@@ -344,7 +343,7 @@ static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule)
   if(mMotorState == 0) // motor 0000  all start,then change state
   {
     //TUDO send 0 let arms wait
-    motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
+    motorMoveAllCmd(pTModule, lMotors, BASE::CT_MOTOR_MOVE_POSITIVE);
     printf("init motor cmd\n");
 
     if(pTModule->mAckState != BASE::ACK_STATE_INIT_OK)
@@ -354,15 +353,126 @@ static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule)
   {
     for (int i=0;i<4;i++)
     {
-      //i motor is stop,then send cmd to start
-      lMotors.mMotorsCmd[i].mCmd = (mMotorState%2) ? BASE::CT_MOTOR_POWERON : BASE::CT_MOTOR_RUN;
-      mMotorState = (mMotorState>>1);
+      //i motor is stop,then send cmd to stop
+      lMotors.mMotorsCmd[i].mCmd = BASE::CT_MOTOR_STOP;
     }
     //if motor is stop then power on else motor running (0,0)wait
     motorCmd(pTModule, lMotors);
-    LOGER::PrintfLog(BASE::S_APP_LOGER, "power on motors!");
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "send stop to motors!");
   }
   return iRet;
+}
+
+/******************************************************************************
+* 功能：leader处于配置状态下，执行某个命令期间，此函数会一直被调用，直到命令达到，或者新的命令到来
+* @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针
+* @return Descriptions
+******************************************************************************/
+static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  //接收命令后执行命令中
+  switch (pTModule->mCond.mMotorCmd)
+  {
+    case BASE::ST_HAND_MOVE_RUNNING:
+    {
+      if(abs(pTModule->mRecMsg.mMotors[0].mPosition-mNowMotors.mMotorsCmd[0].mPosition) > 0.001 &&
+         abs(pTModule->mRecMsg.mMotors[1].mPosition-mNowMotors.mMotorsCmd[1].mPosition) > 0.001 &&
+         abs(pTModule->mRecMsg.mMotors[2].mPosition-mNowMotors.mMotorsCmd[2].mPosition) > 0.001 &&
+         abs(pTModule->mRecMsg.mMotors[3].mPosition-mNowMotors.mMotorsCmd[3].mPosition) > 0.001 )
+      {
+          motorMoveAllCmd(pTModule, mNowMotors, BASE::CT_MOTOR_MOVE_POSITIVE);
+          printf("conf motor cmd postion:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
+          //send rec running data to uper
+          pTModule->mReadLiftSigalNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandZMoveNow = pTModule->mRecMsg.mMotors[2].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandWMoveNow = pTModule->mRecMsg.mMotors[3].mPosition;
+      }
+      else
+      {
+          BASE::MOTORS mZeroMotors = {0};
+          motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
+      }
+      break;
+    }
+    case BASE::ST_ALL_MOVE_RUNNING:
+    {
+      if(abs(pTModule->mRecMsg.mMotors[0].mPosition-mNowMotors.mMotorsCmd[0].mPosition) > 0.001 &&
+         abs(pTModule->mRecMsg.mMotors[1].mPosition-mNowMotors.mMotorsCmd[1].mPosition) > 0.001 &&
+         abs(pTModule->mRecMsg.mMotors[2].mPosition-mNowMotors.mMotorsCmd[2].mPosition) > 0.001)
+      {
+          motorMoveXYZCmd(pTModule, mNowMotors, BASE::CT_MOTOR_MOVE_POSITIVE, 0, 0);
+          printf("conf motor all move postion:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
+          //send rec running data to uper
+          pTModule->mReadLiftSigalNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandZMoveNow = pTModule->mRecMsg.mMotors[2].mPosition;
+          pTModule->mReadLiftSigalNowData.mHandWMoveNow = pTModule->mRecMsg.mMotors[3].mPosition;
+      }
+      else
+      {
+          BASE::MOTORS mZeroMotors = {0};
+          motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
+      }
+      break;
+    }
+    case BASE::ST_ALL_PULL_RUNNING:
+    {
+      ////pull 命令，根据拉立计信息慢慢的增加电机转速。
+      float tensiosV = readTensionValue(pTModule,  pTModule->mRecMsg.mIdentifier);
+      if(fabs(tensiosV-mCmdTension) > 0.001)
+      {
+        BASE::MOTORS mZeroMotors = {0};
+        memset((char*)&mZeroMotors, 0, sizeof(BASE::MOTORS));
+        mZeroMotors.mMotorsCmd[3].mSpeed = 0.01;
+        ////TUDO 正转  倒转
+        if(tensiosV > mCmdTension)
+            motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_MOVE_POSITIVE);
+        else
+            motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_MOVE_INVERSE);
+         printf("conf motor all pull move:set tension %f, now tension:%f, state:%d\n",  mCmdTension, tensiosV, pTModule->mIsNowMotorCmd);
+      }
+      else
+      {
+          BASE::MOTORS mZeroMotors = {0};
+          motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
+      }
+      break;
+    }
+    case BASE::ST_LIFT_STOPED:
+    {
+      BASE::MOTORS mZeroMotors = {0};
+      motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
+      printf("lift stop cmd....\n");
+      break;
+    }
+    //run mode
+    case BASE::ST_ALL_RUN_RUNNING:
+    {
+      //TUDO PID ctrl move to (x y z)
+      BASE::MOTORS lMotors = {0};
+      pTModule->mNewRecMsg = true;
+      float tensiosV = readTensionValue(pTModule,  pTModule->mRecMsg.mIdentifier);
+      pTModule->mReadRunData.runD_PullNow = tensiosV;
+      copyArmsRunDatas(pTModule->mRecMsg, pTModule->mReadRunData);
+      motorMoveAllCmd(pTModule, lMotors, BASE::CT_MOTOR_MOVE_POSITIVE);
+      printf("run motor all running\n");
+      break;
+    }
+    case BASE::ST_RUN_STOPED:
+    {
+      BASE::MOTORS mZeroMotors = {0};
+      motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
+      printf("run stop cmd....  send:%d , rec:%d\n", pTModule->mRandomCode, pTModule->mRecMsg.mRandomCode);
+      break;
+    }
+    default:
+    {
+      printf("conf cond default....\n");
+      break;
+    }
+  }
+
 }
 
 /******************************************************************************
@@ -395,29 +505,26 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
     return -2;
   }
 
-
 /**************************** TUDU send cmd to motor*************************/
-  //确认上位机发来的cmd是不是停止命令，如果是的话就停止电机转动
-  if((pTModule->mIsNowMotorCmd == BASE::CMD_HAND_MOVE_STOP) || (pTModule->mIsNowMotorCmd == BASE::CMD_ALL_MOVE_STOP) || (pTModule->mIsNowMotorCmd == BASE::CMD_ALL_PULL_STOP))
-  {
-      //stop
-      BASE::MOTORS mZeroMotors = {0};
-      motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
-      pTModule->mIsNowMotorCmd = BASE::ST_LIFT_STOPED;
-      printf("conf motor cmd stop\n");
-      LOGER::PrintfLog(BASE::S_APP_LOGER, "***conf state: have motor stop. motor state:%d", pTModule->mIsNowMotorCmd);
-      return iRet;
-  }
-
-  //mIsNowMotorCmd = 0, no new cmd. run cmd state, or stoped.
+  //接收新的命令
   switch (pTModule->mIsNowMotorCmd)
   {
+    //上位机发来的cmd是不是停止命令，如果是的话就停止电机转动
+    case BASE::CMD_HAND_MOVE_STOP:
+    case BASE::CMD_ALL_MOVE_STOP:
+    case BASE::CMD_ALL_PULL_STOP:
+    {
+      setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_LIFT_STOPED, 0, 0);
+      printf("conf motor cmd stop\n");
+      LOGER::PrintfLog(BASE::S_APP_LOGER, "***conf state: have motor stop. motor state:%d", pTModule->mIsNowMotorCmd);
+      pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
+      break;
+    }
     case BASE::CMD_HAND_MOVE_START:
     {
       BASE::MoveLiftSigalData lMovedata = {0};
       pthread_mutex_lock(&pTModule->mMotorMutex);
       memcpy((char*)&lMovedata, (char*)&pTModule->mMoveData, sizeof(BASE::MoveLiftSigalData));
-      pTModule->mIsNowMotorCmd = BASE::ST_HAND_MOVE_RUNNING;
       pthread_mutex_unlock(&pTModule->mMotorMutex);
 
       //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
@@ -426,8 +533,8 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
       mNowMotors.mMotorsCmd[1].mPosition = lMovedata.mHandYMove;
       mNowMotors.mMotorsCmd[2].mPosition = lMovedata.mHandZMove;
       mNowMotors.mMotorsCmd[3].mPosition = lMovedata.mHandWMove;
-      motorMoveCmd(pTModule, mNowMotors, BASE::CT_MOTOR_RUN, 0, 0);
-      printf("conf motor cmd start:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
+      setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_HAND_MOVE_RUNNING, 0, 0);
+      pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
       break;
     }
     case BASE::CMD_ALL_MOVE_START:
@@ -435,7 +542,6 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
       BASE::MoveLiftAllData lMovedata = {0};
       pthread_mutex_lock(&pTModule->mMotorMutex);
       memcpy((char*)&lMovedata, (char*)&pTModule->mMoveData, sizeof(BASE::MoveLiftAllData));
-      pTModule->mIsNowMotorCmd = BASE::ST_ALL_MOVE_RUNNING;
       pthread_mutex_unlock(&pTModule->mMotorMutex);
 
       //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
@@ -443,9 +549,8 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
       mNowMotors.mMotorsCmd[0].mPosition = lMovedata.mHandXMove;
       mNowMotors.mMotorsCmd[1].mPosition = lMovedata.mHandYMove;
       mNowMotors.mMotorsCmd[2].mPosition = lMovedata.mHandZMove;
-
-      motorMoveXYZCmd(pTModule, mNowMotors, BASE::CT_MOTOR_RUN, 0, 0);
-      printf("conf motor all move start:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
+      setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_ALL_MOVE_RUNNING, 0, 0);
+      pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
       break;
     }
     case BASE::CMD_ALL_PULL_START:
@@ -454,100 +559,33 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
       BASE::PullLiftAllData lPulldata = {0};
       pthread_mutex_lock(&pTModule->mMotorMutex);
       memcpy((char*)&lPulldata, (char*)&pTModule->mAllPullData, sizeof(BASE::PullLiftAllData));
-      pTModule->mIsNowMotorCmd = BASE::ST_ALL_PULL_RUNNING;
       pthread_mutex_unlock(&pTModule->mMotorMutex);
 
       mCmdTension = lPulldata.mHandPull;
 
       //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
       memset((char*)&mNowMotors, 0, sizeof(mNowMotors));
-      motorMoveXYZCmd(pTModule, mNowMotors, BASE::CT_MOTOR_STOP, 0, 0);
-      printf("conf motor all pull start:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
+      setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_ALL_PULL_RUNNING, 0, 0);
+      pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
       break;
     }
-    case BASE::ST_HAND_MOVE_RUNNING:
+    case BASE::CMD_INTO_COND_RUN:
     {
-      if(abs(pTModule->mRecMsg.mMotors[0].mPosition-mNowMotors.mMotorsCmd[0].mPosition) > 0.001 &&
-         abs(pTModule->mRecMsg.mMotors[1].mPosition-mNowMotors.mMotorsCmd[1].mPosition) > 0.001 &&
-         abs(pTModule->mRecMsg.mMotors[2].mPosition-mNowMotors.mMotorsCmd[2].mPosition) > 0.001 &&
-         abs(pTModule->mRecMsg.mMotors[3].mPosition-mNowMotors.mMotorsCmd[3].mPosition) > 0.001 )
-      {
-          motorMoveCmd(pTModule, mNowMotors, BASE::CT_MOTOR_RUN, 0, 0);
-          printf("conf motor cmd postion:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
-          //send rec running data to uper
-          pTModule->mReadLiftSigalNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
-          pTModule->mReadLiftSigalNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
-          pTModule->mReadLiftSigalNowData.mHandZMoveNow = pTModule->mRecMsg.mMotors[2].mPosition;
-          pTModule->mReadLiftSigalNowData.mHandWMoveNow = pTModule->mRecMsg.mMotors[3].mPosition;
-      }
-      else
-      {
-          BASE::MOTORS mZeroMotors = {0};
-          motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
-      }
-      break;
-    }
-    case BASE::ST_ALL_MOVE_RUNNING:
-    {
-      if(abs(pTModule->mRecMsg.mMotors[0].mPosition-mNowMotors.mMotorsCmd[0].mPosition) > 0.001 &&
-         abs(pTModule->mRecMsg.mMotors[1].mPosition-mNowMotors.mMotorsCmd[1].mPosition) > 0.001 &&
-         abs(pTModule->mRecMsg.mMotors[2].mPosition-mNowMotors.mMotorsCmd[2].mPosition) > 0.001)
-      {
-          motorMoveXYZCmd(pTModule, mNowMotors, BASE::CT_MOTOR_RUN, 0, 0);
-          printf("conf motor all move postion:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
-          //send rec running data to uper
-          pTModule->mReadLiftSigalNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
-          pTModule->mReadLiftSigalNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
-          pTModule->mReadLiftSigalNowData.mHandZMoveNow = pTModule->mRecMsg.mMotors[2].mPosition;
-          pTModule->mReadLiftSigalNowData.mHandWMoveNow = pTModule->mRecMsg.mMotors[3].mPosition;
-      }
-      else
-      {
-          BASE::MOTORS mZeroMotors = {0};
-          motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
-      }
-      break;
-    }
-    case BASE::ST_ALL_PULL_RUNNING:
-    {
-      ////pull 命令，根据拉立计信息慢慢的增加电机转速。
-      float tensiosV = readTensionValue(pTModule,  pTModule->mRecMsg.mIdentifier);
-      if(fabs(tensiosV-mCmdTension) > 0.001)
-      {
-        BASE::MOTORS mZeroMotors = {0};
-        memset((char*)&mZeroMotors, 0, sizeof(BASE::MOTORS));
-        mZeroMotors.mMotorsCmd[3].mSpeed = 0.01;
-        ////TUDO 正转  倒转
-        if(tensiosV > mCmdTension)
-            motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_RUN, 0, 1);
-        else
-            motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_RUN, 1, 1);
-
-        printf("conf motor all pull move:set tension %f, now tension:%f, state:%d\n",  mCmdTension, tensiosV, pTModule->mIsNowMotorCmd);
-      }
-      else
-      {
-          BASE::MOTORS mZeroMotors = {0};
-          motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
-      }
-
-      break;
-    }
-    case BASE::ST_LIFT_STOPED:
-    {
-      BASE::MOTORS mZeroMotors = {0};
-      motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
-      printf("lift stop cmd....\n");
+      //printf("cond running....\n");
       break;
     }
     default:
     {
       BASE::MOTORS mZeroMotors = {0};
-      motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
-      printf("wait cmd....\n");
+      //LOGER::PrintfLog(BASE::S_APP_LOGER,"wait cmd....  send:%d , rec:%d", pTModule->mRandomCode, pTModule->mRecMsg.mRandomCode);
+      motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
       break;
     }
   }
+
+  //陷入条件运行
+  if(pTModule->mIsNowMotorCmd == BASE::CMD_INTO_COND_RUN)
+    confCondFire(pTModule);
 
   return iRet;
 }
@@ -569,10 +607,10 @@ static uint16_t copyArmsRunDatas(BASE::ARMS_R_MSG mRecMsg, BASE::ReadRunAllData 
   mRunDatas.runR_sysMsg_Y = mRecMsg.mMotors[1].mPosition;
   mRunDatas.runR_sysMsg_Z = mRecMsg.mMotors[2].mPosition;
 
-  mRunDatas.runD_RencoderT = mRecMsg.mEncoders;
-  mRunDatas.runD_RencoderXNow = mRecMsg.mMotors[0].mEncoder;
-  mRunDatas.runD_RencoderYNow = mRecMsg.mMotors[1].mEncoder;
-  mRunDatas.runD_RencoderZNow = mRecMsg.mMotors[2].mEncoder;
+  mRunDatas.runD_RencoderT = mRecMsg.mEncoderTurns;
+  mRunDatas.runD_RencoderXNow = mRecMsg.mMotors[0].mEncoderTurns;
+  mRunDatas.runD_RencoderYNow = mRecMsg.mMotors[1].mEncoderTurns;
+  mRunDatas.runD_RencoderZNow = mRecMsg.mMotors[2].mEncoderTurns;
 }
 
 /******************************************************************************
@@ -604,57 +642,57 @@ static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule)
   }
 
   /**************************** TUDU send cmd to motor*************************/
-    //mIsNowMotorCmd stop handle cmd
-  if(pTModule->mIsNowMotorCmd == BASE::CMD_RUN_STOP)
-  {
-      //stop
-      BASE::MOTORS mZeroMotors = {0};
-      motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
-      pTModule->mIsNowMotorCmd = BASE::ST_RUN_STOPED;
-      printf("run state motor cmd stop\n");
-      LOGER::PrintfLog(BASE::S_APP_LOGER, "***run state: have motor stop. motor state:%d", pTModule->mIsNowMotorCmd);
-      return iRet;
-  }
-
   switch (pTModule->mIsNowMotorCmd)
   {
+    case BASE::CMD_RUN_STOP:
+    {
+      //TUDO PID ctrl move to (x y z)
+      setStateCond(pTModule->mCond, BASE::M_STATE_RUN, BASE::ST_RUN_STOPED, 0, 0);
+      pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
+      break;
+    }
     case BASE::CMD_RUN_START:
     {
       //TUDO PID ctrl move to (x y z)
-      pTModule->mIsNowMotorCmd = BASE::ST_ALL_RUN_RUNNING;
-      BASE::MOTORS mZeroMotors = {0};
-      motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
+      setStateCond(pTModule->mCond, BASE::M_STATE_RUN, BASE::ST_ALL_RUN_RUNNING, 0, 0);
+      pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
       break;
     }
-    case BASE::ST_ALL_RUN_RUNNING:
+    case BASE::CMD_INTO_COND_RUN:
     {
-      //TUDO PID ctrl move to (x y z)
-      BASE::MOTORS lMotors = {0};
-      pTModule->mNewRecMsg = true;
-      float tensiosV = readTensionValue(pTModule,  pTModule->mRecMsg.mIdentifier);
-      pTModule->mReadRunData.runD_PullNow = tensiosV;
-      copyArmsRunDatas(pTModule->mRecMsg, pTModule->mReadRunData);
-      motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_RUN, 0, 0);
-      printf("run motor all running\n");
-      break;
-    }
-    case BASE::ST_RUN_STOPED:
-    {
-      BASE::MOTORS mZeroMotors = {0};
-      motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
-      printf("run stop cmd....\n");
       break;
     }
     default:
     {
       BASE::MOTORS mZeroMotors = {0};
-      motorMoveCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP, 0, 0);
+      motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
       printf("running wait cmd....\n");
       break;
     }
   }
 
+  //陷入条件运行
+  if(pTModule->mIsNowMotorCmd == BASE::CMD_INTO_COND_RUN)
+    confCondFire(pTModule);
+
   return  iRet;
+}
+
+/******************************************************************************
+* 功能：设置状态条件变量
+* @param tCond : tCond是条件状态变量
+* @param tState : tState是当前运行状态
+* @param tMotorCmd : tMotorCmd是当前运行的命令
+* @param tCycTimes : tCycTimes是设置当前命令运行周期数，0不设置
+* @param tWaitAck : tWaitAck是设置将要接收的Ack命令，0不设置
+* @return Descriptions
+******************************************************************************/
+static void setStateCond(BASE::M_STATE_CONDITIONS &tCond, BASE::M_STATE tState, uint16_t tMotorCmd, int16_t  tCycTimes, uint16_t  tWaitAck)
+{
+  tCond.mState = tState;
+  tCond.mMotorCmd = tMotorCmd;
+  tCond.mCycTimes = tCycTimes;
+  tCond.mWaitAck  = tWaitAck;
 }
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
@@ -667,6 +705,7 @@ static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule)
 void* threadEntry(void* pModule)
 {
   BASE::ARMS_THREAD_INFO *pTModule =(BASE::ARMS_THREAD_INFO *) pModule;
+
   if(NULL == pTModule)
   {
     return 0;
@@ -710,8 +749,20 @@ void* threadEntry(void* pModule)
         //check if have client link
         if(size != sizeof(BASE::ARMS_R_MSG))
         {
-          LOGER::PrintfLog(BASE::S_APP_LOGER, "init state: %s, no client link", pTModule->mThreadName);
-          break;
+          //判断是否还在上电过程中
+          if((pTModule->mCond.mMotorCmd == BASE::CT_MOTOR_STOP) && ((--pTModule->mCond.mCycTimes) > 0))
+          {
+            BASE::MOTORS mZeroMotors = {0};
+            motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
+            LOGER::PrintfLog(BASE::S_APP_LOGER, "power on doing, wait:%d times, size:%d", pTModule->mCond.mCycTimes, size);
+            break;
+          }
+          else
+          {
+            LOGER::PrintfLog(BASE::S_APP_LOGER, "init state: %s, no client link", pTModule->mThreadName);
+            pTModule->mState = BASE::M_STATE_QUIT;
+            break;
+          }
         }
         initFire(pTModule);
         break;
@@ -725,7 +776,7 @@ void* threadEntry(void* pModule)
         {
           LOGER::PrintfLog(BASE::S_APP_LOGER, "conf state: %s, client overtime or lost link. stop app", pTModule->mThreadName);
           //stop all modules
-          pTModule->mState = BASE::M_STATE_STOP;
+          pTModule->mState = BASE::M_STATE_QUIT;
           perror("this");
           break;
         }
@@ -747,13 +798,13 @@ void* threadEntry(void* pModule)
       }
       case BASE::M_STATE_STOP:
       {
-        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_STOP, 0, 0);
-        printf("motor stoped state...\n");
+        motorMoveAllCmd(pTModule, lMotors, BASE::CT_MOTOR_STOP);
+        //printf("motor stoped state...\n");
         break;
       }
       case BASE::M_STATE_QUIT:
       {
-        motorMoveCmd(pTModule, lMotors, BASE::CT_MOTOR_POWERDOWN, 0, 0);
+        motorMoveAllCmd(pTModule, lMotors, BASE::CT_MOTOR_STOP);
         pTModule->mWorking = false;
         break;
       }

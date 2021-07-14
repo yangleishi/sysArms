@@ -298,7 +298,7 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mState = BASE::M_STATE_INIT;
     mArmsModule[qIdx-1].mAckState = BASE::ACK_STATE_NULL;
     mArmsModule[qIdx-1].mPrintQueueMutex = &mPrintQueueMutex;
-    mArmsModule[qIdx-1].mSerialNumber = qIdx-1;
+    mArmsModule[qIdx-1].mMsgId = qIdx - 1 + BASE::ID_LEADER_FIR;
     mArmsModule[qIdx-1].mNewRecMsg = false;
     mArmsModule[qIdx-1].mNowTension  = &mTensionsData[qIdx-1];
     mArmsModule[qIdx-1].mCpuAffinity  = CONF::CPU_LEAD;
@@ -608,7 +608,7 @@ static void changeState()
 static int32_t suprMainLoop(){
   //TODU
   struct timespec now, next, interval;
-  unsigned int nDelay = 1000;        /* usec */
+  unsigned int nDelay = 3000;        /* usec */
 
   int  ret;
 
@@ -620,11 +620,12 @@ static int32_t suprMainLoop(){
     if (clock_gettime(CLOCK_MONOTONIC, &now) == -1)
         continue;
 
+    //printf("ms:%d \n", (now.tv_nsec -  next.tv_nsec)/1000);
+
     next = now;
     next.tv_sec  += interval.tv_sec;
     next.tv_nsec += interval.tv_nsec;
     tsnorm(&next);
-
     if ((ret = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL)))
     {
       if (ret != EINTR)

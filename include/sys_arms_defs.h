@@ -42,6 +42,15 @@ typedef enum
   M_STATE_QUIT,
 } M_STATE;
 
+//定义线程模块在运行状态下执行各种条件结构体
+typedef struct
+{
+  M_STATE   mState;         //模块处于的状态
+  uint16_t   mMotorCmd;      //模块当前执行命令
+  int16_t  mCycTimes;       //模块命令要循环周期数
+  uint16_t  mWaitAck;       //模块要等待的ACK
+} M_STATE_CONDITIONS;
+
 //定义线程模块应答的状态
 typedef enum
 {
@@ -72,24 +81,18 @@ const uint16_t   ID_LEADER_FIR = 0x57;
 
 //协议中消息类型////////////////////////////////
 /**********************************************
-命令消息:0x00(本地发给上位机)
 数据消息:0x01(本地发给上位机)数据定义见附 3
-时间校准:0x02(上位机发给本地)
 设备控制消息:0x03(上位机发给本地,设置设备的状态表)消息格式与状态表见附 3
 设备参数设置消息:0x04(上位机发给本地)
 设备参数读取消息:0x05(上位机发给本地)
-状态消息:0x06(上位机发给本地)
 消息重发请求:0x07(双向)
 消息正确应答:0x08(双向)
 消息错误应答:0x09(双向)
 **********************************************/
-const uint16_t   M_TYPE_TO_LEADER_CMD = 0x00;
 const uint16_t   M_TYPE_TO_LEADER_DATA = 0x01;
-const uint16_t   M_TYPE_TO_CONTROLER_TIME = 0x02;
 const uint16_t   M_TYPE_TO_CONTROLER_CMD = 0x03;
 const uint16_t   M_TYPE_TO_CONTROLER_WCONF = 0x04;
 const uint16_t   M_TYPE_TO_CONTROLER_RCONF = 0x05;
-const uint16_t   M_TYPE_TO_CONTROLER_STATE = 0x06;
 const uint16_t   M_TYPE_TO_ALL_REPEAT= 0x07;
 const uint16_t   M_TYPE_TO_ALL_ANSWER_OK= 0x08;
 const uint16_t   M_TYPE_TO_ALL_ANSWER_FAILED= 0x09;
@@ -118,11 +121,10 @@ const uint8_t   CT_MOTOR_MOVE_P_CURVE = 0x07;
 const uint8_t   CT_MOTOR_MOVE_P_TRAPEZIUM  = 0x08;
 const uint8_t   CT_MOTOR_MOVE_P_IMMEDIATELY = 0x09;
 
+const uint8_t   CT_MOTOR_SIGNOUT = 0x09;
 
-const uint8_t   CT_MOTOR_POWERDOWN = 0x00;
-const uint8_t   CT_MOTOR_POWERON    = 0x01;
-const uint8_t   CT_MOTOR_ZERO   = 0x03;
-const uint8_t   CT_MOTOR_RUN   = 0x04;
+const uint8_t   CT_MOTOR_ZERO   = 0x13;
+
 
 //定义控制板反馈状态
 /*******************************************
@@ -299,7 +301,8 @@ typedef struct
   float      mPosition;
   float      mSpeed;
   float      mAcceleration;
-  uint64_t   mEncoder;
+  uint32_t   mEncoderTurns;
+  uint16_t   mEncoderPulses;
 } MOTOR_REC_DATAS;
 
 //定义机械臂控制板接收消息
@@ -324,7 +327,8 @@ typedef struct: public MSG_HEARDER
 
   //encoder  data
   uint8_t   mEncoderStateCode;
-  uint32_t  mEncoders;
+  uint32_t  mEncoderTurns;
+  uint16_t  mEncoderPulses;
 
   //四个电机数据
   MOTOR_REC_DATAS mMotors[4];
@@ -395,12 +399,14 @@ const uint16_t  CMD_RUN_STOP = CMD_BASE + 12;
 const uint16_t  CMD_RUN_STOP_E = CMD_BASE + 13;
 const uint16_t  CMD_QUIT = CMD_BASE + 14;
 
+//接收到上位机控制按钮后，运行期间leader陷入条件运行状态
+const uint16_t  CMD_INTO_COND_RUN = CMD_BASE + 15;
 
 //上位机循环读取显示数据命令
-const uint16_t  CMD_CYC_READ_SYS_DELAYED = CMD_BASE + 15;
-const uint16_t  CMD_CYC_READ_LIFT_DATAS = CMD_BASE + 16;
-const uint16_t  CMD_CYC_READ_RUNNING_DATAS = CMD_BASE + 17;
-const uint16_t  CMD_CYC_READ_SHOWDE_DATAS = CMD_BASE + 18;
+const uint16_t  CMD_CYC_READ_SYS_DELAYED = CMD_BASE + 25;
+const uint16_t  CMD_CYC_READ_LIFT_DATAS = CMD_BASE + 26;
+const uint16_t  CMD_CYC_READ_RUNNING_DATAS = CMD_BASE + 27;
+const uint16_t  CMD_CYC_READ_SHOWDE_DATAS = CMD_BASE + 28;
 
 //上位机发送控制，使得app运行状态
 const uint16_t  ST_HAND_MOVE_RUNNING = CMD_BASE + 50;
@@ -607,6 +613,9 @@ typedef struct
 
   //cpu mask
   int         mCpuAffinity;
+
+  //标识当前leader的ID
+  uint16_t    mMsgId;
 } THREAD_INFO_HEADER;
 
 //日志线程结构体信息loger thread info
@@ -637,7 +646,6 @@ typedef struct: public THREAD_INFO_HEADER
   ARMS_S_MSG      mSendMsg;
   pthread_mutex_t mArmsMsgMutex;
   pthread_cond_t  mArmsMsgReady;
-  int             mSerialNumber;  //0 1 2.... not dev int
 
   //rec motor cmd
   int                mIsNowMotorCmd;
@@ -656,6 +664,11 @@ typedef struct: public THREAD_INFO_HEADER
   //无线数据传输模块，如果不使用无线模块，此值在MArmsUpData中
   TENSIONS_NOW_DATA   *mNowTension;
 
+  //线程在每个状态下运行条件
+  BASE::M_STATE_CONDITIONS mCond;
+
+  //随即码
+  uint16_t   mRandomCode;
 } ARMS_THREAD_INFO;
 
 //拉力计线程信息 tensions thread info

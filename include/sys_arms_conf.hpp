@@ -27,7 +27,7 @@ namespace CONF {
 //最大可以使用的拉力计接收模块数量
 #define DEF_SYS_MAX_TENSIONLEADER_NUMS 2
 //系统中使用的拉力计接收模块数量，0时候采用有线传输（拉力计信息在有线传输协议里）
-#define DEF_SYS_USE_TENSIONLEADER_NUMS 2
+#define DEF_SYS_USE_TENSIONLEADER_NUMS 0
 
 //系统中所有线程模块ID
 typedef enum {
@@ -79,11 +79,11 @@ const char MN_SERVER_IP[][16] = {"192.168.1.100", "192.168.1.100", "192.168.1.10
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100",
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100"};
 
-const char MN_PEER_IP[][16] = {"192.168.1.2", "192.168.1.2", "192.168.1.2",
-                                 "192.168.1.2", "192.168.1.2", "192.168.1.2",
-                                 "192.168.1.2", "192.168.1.2", "192.168.1.2",
-                                 "192.168.1.2", "192.168.1.2", "192.168.1.2",
-                                 "192.168.1.2", "192.168.1.2", "192.168.1.2"};
+const char MN_PEER_IP[][16] = {"192.168.1.99", "192.168.1.99", "192.168.1.99",
+                                 "192.168.1.99", "192.168.1.99", "192.168.1.99",
+                                 "192.168.1.99", "192.168.1.99", "192.168.1.99",
+                                 "192.168.1.99", "192.168.1.99", "192.168.1.99",
+                                 "192.168.1.99", "192.168.1.99", "192.168.1.99"};
 
 const char MN_TENSION_SERVER_IP[][16] = {"192.168.1.100", "192.168.1.100"};
 
@@ -91,10 +91,10 @@ const int  MN_SERVER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 8001, 8002, 8003,
                                                      8004, 8005, 8006,
                                                      8007, 8008, 8009,
                                                      8010, 8011, 8012};
-const int  MN_PEER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 9001, 9002, 9003,
-                                                     9004, 9005, 9006,
-                                                     9007, 9008, 9009,
-                                                     9010, 9011, 9012};
+const int  MN_PEER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 8889, 8889, 8889,
+                                                     8889, 8889, 8889,
+                                                     8889, 8889, 8889,
+                                                     8889, 8889, 8889};
 
 const int  MN_TENSION_SERVER_PORT[DEF_SYS_MAX_TENSIONLEADER_NUMS] = { 9001, 9002};
 
@@ -109,7 +109,7 @@ const char MN_ARMS_DATA_FILE[] = "sysArms.data";
 //*********////////// UDP timeout///////////////////
 //定义模块线程UDP接收消息超时
 const int SERVER_UDP_TIMEOUT_S = 0;
-const int SERVER_UDP_TIMEOUT_US = 5000;
+const int SERVER_UDP_TIMEOUT_US = 30;
 const int SERVER_UDP_TENSION_TIMEOUT_S = 1;
 const int SERVER_UDP_TENSION_TIMEOUT_US = 0;
 const int SERVER_UDP_INTERACTION_TIMEOUT_S = 1;
