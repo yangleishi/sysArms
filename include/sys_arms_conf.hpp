@@ -109,7 +109,7 @@ const char MN_ARMS_DATA_FILE[] = "sysArms.data";
 //*********////////// UDP timeout///////////////////
 //定义模块线程UDP接收消息超时
 const int SERVER_UDP_TIMEOUT_S = 0;
-const int SERVER_UDP_TIMEOUT_US = 30;
+const int SERVER_UDP_TIMEOUT_US = 1000;
 const int SERVER_UDP_TENSION_TIMEOUT_S = 1;
 const int SERVER_UDP_TENSION_TIMEOUT_US = 0;
 const int SERVER_UDP_INTERACTION_TIMEOUT_S = 1;

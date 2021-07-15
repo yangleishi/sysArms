@@ -608,7 +608,7 @@ static void changeState()
 static int32_t suprMainLoop(){
   //TODU
   struct timespec now, next, interval;
-  unsigned int nDelay = 3000;        /* usec */
+  unsigned int nDelay = 4000;        /* usec */
 
   int  ret;
 

@@ -249,31 +249,20 @@ typedef struct
 
 
 ///////////////////////////////////
-//定义机械臂控制板传输消息头
+//定义机械臂控制板发送消息
 typedef struct
 {
-  //frame unique dev 0-10
   uint16_t   mIdentifier;
-
   //msg type
   uint16_t   mMsgType;
-
   //随机码，上位机，自加一
   uint16_t   mRandomCode;
-
   //states
   uint16_t   mStateCode;
-
   //时间戳，妙、微妙
   SYS_TIME   mSysTime;
-
   //数据长度
   uint16_t   mDataLength;
-} MSG_HEARDER;
-
-//定义机械臂控制板发送消息
-typedef struct: public MSG_HEARDER
-{
   //ctrl motors data
   MOTORS    mMotors;
 
@@ -283,8 +272,19 @@ typedef struct: public MSG_HEARDER
 } ARMS_S_MSG;
 
 //定义无线拉力计控制板发送消息
-typedef struct: public MSG_HEARDER
+typedef struct
 {
+  uint16_t   mIdentifier;
+  //msg type
+  uint16_t   mMsgType;
+  //随机码，上位机，自加一
+  uint16_t   mRandomCode;
+  //states
+  uint16_t   mStateCode;
+  //时间戳，妙、微妙
+  SYS_TIME   mSysTime;
+  //数据长度
+  uint16_t   mDataLength;
   //ctrl tensions start/stop data. 0 1
   uint8_t    mCmd;
 
@@ -306,8 +306,20 @@ typedef struct
 } MOTOR_REC_DATAS;
 
 //定义机械臂控制板接收消息
-typedef struct: public MSG_HEARDER
+typedef struct
 {
+  //frame unique dev 0-10
+  uint16_t   mIdentifier;
+  //msg type
+  uint16_t   mMsgType;
+  //随机码，上位机，自加一
+  uint16_t   mRandomCode;
+  //states
+  uint16_t   mStateCode;
+  //时间戳，妙、微妙
+  SYS_TIME   mSysTime;
+  //数据长度
+  uint16_t   mDataLength;
 //****************************  rec Datas  ***********************************//
   // Switch datas
   uint8_t   mSwitchStateCode;
@@ -315,15 +327,15 @@ typedef struct: public MSG_HEARDER
 
   //inclinometers  datas 0-7,7-15
   uint8_t   mInclinometersStateCode;
-  float     mInclinometer1_x;
-  float     mInclinometer1_y;
-  float     mInclinometer2_x;
-  float     mInclinometer2_y;
+  uint32_t     mInclinometer1_x;
+  uint32_t     mInclinometer1_y;
+  uint32_t     mInclinometer2_x;
+  uint32_t     mInclinometer2_y;
 
   //inclinometers  datas 0-7,7-15
   uint8_t   mSikosStateCode;
-  float     mSiko1;
-  float     mSiko2;
+  uint32_t     mSiko1;
+  uint32_t     mSiko2;
 
   //encoder  data
   uint8_t   mEncoderStateCode;
@@ -335,7 +347,7 @@ typedef struct: public MSG_HEARDER
 
   //拉力计
   uint8_t   mTensionCode;
-  float     mTension;
+  uint32_t     mTension;
 
   //crc 校验码
   uint8_t   mCrcCodeH;
@@ -347,22 +359,16 @@ typedef struct
 {
   //frame start 0x1ACF
   uint16_t  mFrameStart;
-
   //frame unique dev 0xFF
   uint8_t   mIdentifier;
-
   //APID 0x03
   uint8_t   mApid;
-
   //dev type 0x01
   uint8_t   mType;
-
   //states
   uint8_t   mStateCode;
-
   // frame time
   SYS_TIME  mSysTime;
-
   //****************************  rec tensions  ***********************************//
   // tensions datas
   uint8_t   mTensionsStateCode;

@@ -188,7 +188,7 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t
   pMsg->mSysTime.mSysTimeS  = now.tv_sec;
   pMsg->mSysTime.mSysTimeUs = now.tv_nsec/1000;
 
-  LOGER::PrintfLog(BASE::S_APP_LOGER, "send time(us) :%d", pMsg->mSysTime.mSysTimeUs);
+  //LOGER::PrintfLog(BASE::S_APP_LOGER, "send time(us) :%d", pMsg->mSysTime.mSysTimeUs);
   mSysSendTime.mSysTimeS = pMsg->mSysTime.mSysTimeS;
   mSysSendTime.mSysTimeUs = pMsg->mSysTime.mSysTimeUs;
 
@@ -495,7 +495,9 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
     return -1;
   }
 
+  //TUDO 暂时不用检查电机错误，消息状态玛出错包含电机出错
   //检查电机是否报错
+  /*
   uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
   if(mMotorState != 0) // some motor stop. then stop all modules
   {
@@ -504,6 +506,7 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
     pTModule->mState = BASE::M_STATE_STOP;
     return -2;
   }
+  */
 
 /**************************** TUDU send cmd to motor*************************/
   //接收新的命令
@@ -631,6 +634,8 @@ static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule)
     return -1;
   }
 
+  //TUDO 暂时不用检查电机错误，消息状态玛出错包含电机出错
+  /*
   //check motor if running
   uint16_t mMotorState = checkMotorsState(pTModule->mRecMsg);
   if(mMotorState != 0) // some motor stop. then stop all modules
@@ -640,6 +645,7 @@ static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule)
     pTModule->mState = BASE::M_STATE_STOP;
     return -2;
   }
+  */
 
   /**************************** TUDU send cmd to motor*************************/
   switch (pTModule->mIsNowMotorCmd)
@@ -754,7 +760,7 @@ void* threadEntry(void* pModule)
           {
             BASE::MOTORS mZeroMotors = {0};
             motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
-            LOGER::PrintfLog(BASE::S_APP_LOGER, "power on doing, wait:%d times, size:%d", pTModule->mCond.mCycTimes, size);
+            LOGER::PrintfLog(BASE::S_APP_LOGER, "power on doing, wait:%d times, size:%d  %d", pTModule->mCond.mCycTimes, size, sizeof(pTModule->mRecMsg));
             break;
           }
           else
@@ -774,12 +780,17 @@ void* threadEntry(void* pModule)
         //perror("leader rec");
         if(size != sizeof(BASE::ARMS_R_MSG))
         {
-          LOGER::PrintfLog(BASE::S_APP_LOGER, "conf state: %s, client overtime or lost link. stop app", pTModule->mThreadName);
+          LOGER::PrintfLog(BASE::S_APP_LOGER, "conf state: %s, size:%d client overtime or lost link. stop app", pTModule->mThreadName, size);
           //stop all modules
           pTModule->mState = BASE::M_STATE_QUIT;
           perror("this");
           break;
         }
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "rec msg :%d  %d %d %d  %d %d  %d %d  %d  %d %d  %d %d", pTModule->mRecMsg.mEncoderStateCode, pTModule->mRecMsg.mEncoderTurns,
+                                                                          pTModule->mRecMsg.mSysTime.mSysTimeS, pTModule->mRecMsg.mSikosStateCode,pTModule->mRecMsg.mInclinometer1_x, pTModule->mRecMsg.mInclinometer1_y,
+                                                                          pTModule->mRecMsg.mRandomCode, pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,
+                                                                          pTModule->mRecMsg.mTension, pTModule->mRecMsg.mTensionCode, pTModule->mRecMsg.mEncoderPulses,
+                                                                          pTModule->mRecMsg.mDataLength);
         confFire(pTModule);
         break;
       }
