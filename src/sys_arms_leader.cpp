@@ -786,11 +786,10 @@ void* threadEntry(void* pModule)
           perror("this");
           break;
         }
-        LOGER::PrintfLog(BASE::S_APP_LOGER, "rec msg :%d  %d %d %d  %d %d  %d %d  %d  %d %d  %d %d", pTModule->mRecMsg.mEncoderStateCode, pTModule->mRecMsg.mEncoderTurns,
-                                                                          pTModule->mRecMsg.mSysTime.mSysTimeS, pTModule->mRecMsg.mSikosStateCode,pTModule->mRecMsg.mInclinometer1_x, pTModule->mRecMsg.mInclinometer1_y,
-                                                                          pTModule->mRecMsg.mRandomCode, pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,
-                                                                          pTModule->mRecMsg.mTension, pTModule->mRecMsg.mTensionCode, pTModule->mRecMsg.mEncoderPulses,
-                                                                          pTModule->mRecMsg.mDataLength);
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "时间戳:%d(s) %d(us),随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉力计:%d",
+                                             pTModule->mRecMsg.mSysTime.mSysTimeS, pTModule->mRecMsg.mSysTime.mSysTimeUs, pTModule->mRecMsg.mRandomCode,
+                                             pTModule->mRecMsg.mSwitchTiggers,pTModule->mRecMsg.mInclinometer1_x, pTModule->mRecMsg.mInclinometer1_y,
+                                             pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,pTModule->mRecMsg.mEncoderTurns,pTModule->mRecMsg.mTension);
         confFire(pTModule);
         break;
       }
