@@ -322,36 +322,36 @@ typedef struct
   uint16_t   mDataLength;
 //****************************  rec Datas  ***********************************//
   // Switch datas
-  uint8_t   mSwitchStateCode;
-  uint16_t  mSwitchTiggers;
+  uint8_t    mSwitchStateCode;
+  uint16_t   mSwitchTiggers;
 
   //inclinometers  datas 0-7,7-15
-  uint8_t   mInclinometersStateCode;
-  uint32_t     mInclinometer1_x;
-  uint32_t     mInclinometer1_y;
-  uint32_t     mInclinometer2_x;
-  uint32_t     mInclinometer2_y;
+  uint8_t    mInclinometersStateCode;
+  uint32_t   mInclinometer1_x;
+  uint32_t   mInclinometer1_y;
+  uint32_t   mInclinometer2_x;
+  uint32_t   mInclinometer2_y;
 
   //inclinometers  datas 0-7,7-15
-  uint8_t   mSikosStateCode;
-  uint32_t     mSiko1;
-  uint32_t     mSiko2;
+  uint8_t    mSikosStateCode;
+  uint32_t   mSiko1;
+  uint32_t   mSiko2;
 
   //encoder  data
-  uint8_t   mEncoderStateCode;
-  uint32_t  mEncoderTurns;
-  uint16_t  mEncoderPulses;
+  uint8_t    mEncoderStateCode;
+  uint32_t   mEncoderTurns;
+  uint16_t   mEncoderPulses;
 
   //四个电机数据
   MOTOR_REC_DATAS mMotors[4];
 
   //拉力计
-  uint8_t   mTensionCode;
-  uint32_t     mTension;
+  uint8_t    mTensionCode;
+  uint32_t   mTension;
 
   //crc 校验码
-  uint8_t   mCrcCodeH;
-  uint8_t   mCrcCodeL;
+  uint8_t    mCrcCodeH;
+  uint8_t    mCrcCodeL;
 } ARMS_R_MSG;
 
 //定义无线拉力计控制板接收消息
@@ -524,28 +524,28 @@ typedef struct{
 
 //起重界面中整体控制移动,可控制多个单元X Y Z方向移动
 typedef struct{
-  int     mMudoleNum;
-  float   mHandXMove;
-  float   mHandYMove;
-  float   mHandZMove;
-  float   mHandMoveSpeed;
-  bool    mIsValid;
+  int   mMudoleNum;
+  float mHandXMove;
+  float mHandYMove;
+  float mHandZMove;
+  float mHandMoveSpeed;
+  bool  mIsValid;
 } MoveLiftAllData;
 
 //起吊界面中，控制器接收arms运行数据
 typedef struct{
-  int     mMudoleNum;
-  float   mHandXMoveNow;
-  float   mHandYMoveNow;
-  float   mHandZMoveNow;
-  float   mHandWMoveNow;
+  int   mMudoleNum;
+  float mHandXMoveNow;
+  float mHandYMoveNow;
+  float mHandZMoveNow;
+  float mHandWMoveNow;
 } ReadLiftSigalNowData;
 
 //起重界面中整体pull移动,可控制多个单元上拉
 typedef struct{
-  int     mMudoleNum;
-  float   mHandPull;
-  int    mIsValid;
+  int   mMudoleNum;
+  float mHandPull;
+  int   mIsValid;
 } PullLiftAllData;
 
 //运行界面中细节信息显示,
@@ -573,6 +573,8 @@ typedef struct{
   float   runD_RencoderYSet;     //编码器设定值
   float   runD_RencoderZNow;     //编码器当前值
   float   runD_RencoderZSet;     //编码器设定值
+  float   runD_RencoderWNow;     //编码器当前值
+  float   runD_RencoderWSet;     //编码器设定值
   int     mIsValid;
 } ReadRunAllData;
 
@@ -614,14 +616,14 @@ typedef struct
   M_STATE      mState;
 
   //log queue pri
-  STR_QUEUE* mLogQueue;
+  STR_QUEUE*   mLogQueue;
   pthread_mutex_t *mPrintQueueMutex;
 
   //cpu mask
-  int         mCpuAffinity;
+  int          mCpuAffinity;
 
   //标识当前leader的ID
-  uint16_t    mMsgId;
+  uint16_t     mMsgId;
 } THREAD_INFO_HEADER;
 
 //日志线程结构体信息loger thread info
