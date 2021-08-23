@@ -29,6 +29,23 @@ namespace CONF {
 //系统中使用的拉力计接收模块数量，0时候采用有线传输（拉力计信息在有线传输协议里）
 #define DEF_SYS_USE_TENSIONLEADER_NUMS 0
 
+//编码器0点位置,千分度。25度，这个值是标定值
+#define DEF_SYS_ENCODER_ZERO 18004
+//编码器最大转动角度
+#define DEF_SYS_ENCODER_MAX 180000
+
+//定义PI
+#define DEF_SYS_PI     3.1415926
+#define DEF_SYS_DEGREE_TO_RADIAN    0.00001745
+//g 重力加速度
+#define DEF_SYS_MG    0.0098
+
+//1 rad/s 转换成电机执行的速度 10000 脉冲/s
+#define DEF_SYS_RADIAN_TO_PULSE    1591.54
+
+static const unsigned int nDelay = 10000;        /* usec */
+
+
 //系统中所有线程模块ID
 typedef enum {
   ARMS_M_SUPR_ID = 0, /*0 is special one, don't change it */
@@ -135,7 +152,11 @@ const float  IN_OFFSET_Z[DEF_SYS_USE_ARMS_NUMS] = { 0 };
 const float  IN_OFFSET_W[DEF_SYS_USE_ARMS_NUMS] = { 0 };
 const float  IN_OFFSET_ANGLE[DEF_SYS_USE_ARMS_NUMS] = { 0 };
 
-
+//*********////////// 控制算法PID参数///////////////////
+const float  PID_P_FOLLOWUP = 1000.0;
+const float  PID_D_FOLLOWUP = 4000.0;
+//绳索的长度，暂时设置成固定值，等调试完毕该值是变动的
+const float  ROPE_LEN = 1.5;
 
 
 }  //namespace

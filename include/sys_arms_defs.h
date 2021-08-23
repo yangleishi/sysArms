@@ -27,6 +27,9 @@
 #define	PRINT_QUEUE_MAX_ITEMS		5120
 #define	PRINT_STRING_MAX_LENGTH		128
 
+//电机速度 ，脉冲/s,1rpm 等于 10000/60
+#define MOTOR_V_TO_S            (166)
+
 namespace BASE {
 
 //////////////////////////////////// System internal structure  /////////////////////////////////////
@@ -65,6 +68,20 @@ typedef enum
   S_APP_LOGER = 0,
   S_ARMS_DATA,
 } LOG_SAVA_W;
+
+/**************************控制算法使用结构体**************************/
+//二维位置向量,位置，速度，加速度，角度
+typedef struct
+{
+  float x;
+  float y;
+} POS_2,ANGLE_2,ACC_2,VEL_2;
+
+//四维位置向量速度，加速度，角度
+typedef struct
+{
+  float v[4];
+} VEL_4;//单位为 rad/s
 
 ////////////////////////////////////11 组机械臂协议中的定义   /////////////////////////////////////
 //协议中系统标识符号定义,上位机ID 控制版ID/////////////
@@ -226,9 +243,10 @@ typedef struct
 typedef struct
 {
   //ctrl motors data
-  uint8_t    mCmd;
-  float      mPosition;
-  float      mSpeed;
+  uint32_t    mCmd;
+  int32_t     mPosition;
+  //单位是rpm *1000 取整
+  int32_t     mSpeed;   //单位为 脉冲/s
 } MOTOR_CTRL;
 
 
@@ -262,13 +280,12 @@ typedef struct
   //时间戳，妙、微妙
   SYS_TIME   mSysTime;
   //数据长度
-  uint16_t   mDataLength;
+  uint32_t   mDataLength;
   //ctrl motors data
-  MOTORS    mMotors;
-
+  MOTORS     mMotors;
+  //MOTOR_CTRL mMotorsCmd[4];
   //crc 校验码
-  uint8_t   mCrcCodeH;
-  uint8_t   mCrcCodeL;
+  uint16_t   mCrcCode;
 } ARMS_S_MSG;
 
 //定义无线拉力计控制板发送消息
@@ -298,9 +315,9 @@ typedef struct
 {
   //rec motors datas
   uint8_t    mMotorStateCode;
-  float      mPosition;
-  float      mSpeed;
-  float      mAcceleration;
+  int32_t    mPosition;
+  int32_t    mSpeed;           //单位为:度/s
+  int32_t    mAcceleration;
   uint32_t   mEncoderTurns;
   uint16_t   mEncoderPulses;
 } MOTOR_REC_DATAS;
@@ -327,19 +344,19 @@ typedef struct
 
   //inclinometers  datas 0-7,7-15
   uint8_t    mInclinometersStateCode;
-  uint32_t   mInclinometer1_x;
-  uint32_t   mInclinometer1_y;
+  uint32_t   mInclinometer1_x;     //单位为角度
+  uint32_t   mInclinometer1_y;     //单位为角度
   uint32_t   mInclinometer2_x;
   uint32_t   mInclinometer2_y;
 
   //inclinometers  datas 0-7,7-15
   uint8_t    mSikosStateCode;
-  uint32_t   mSiko1;
+  uint32_t   mSiko1;            //单位为毫米
   uint32_t   mSiko2;
 
   //encoder  data
   uint8_t    mEncoderStateCode;
-  uint32_t   mEncoderTurns;
+  int32_t    mEncoderTurns;     //单位为角度*1000。
   uint16_t   mEncoderPulses;
 
   //四个电机数据
@@ -347,12 +364,44 @@ typedef struct
 
   //拉力计
   uint8_t    mTensionCode;
-  uint32_t   mTension;
+  int32_t    mTension;         //单位为g
 
   //crc 校验码
   uint8_t    mCrcCodeH;
   uint8_t    mCrcCodeL;
 } ARMS_R_MSG;
+
+
+//定义机械臂控制板接收消息
+typedef struct
+{
+  //frame unique dev 0-10
+  uint16_t   mIdentifier;
+  //msg type
+  uint16_t   mMsgType;
+  //随机码，上位机，自加一
+  uint16_t   mRandomCode;
+  //states
+  uint16_t   mStateCode;
+  //时间戳，妙、微妙
+  SYS_TIME   mSysTime;
+  //数据长度
+  uint16_t   mDataLength;
+//****************************  rec Datas  ***********************************//
+  // Switch datas
+  uint8_t    mSwitchStateCode;
+  uint16_t   mSwitchTiggers;
+
+  float   mInclinometer1_x;     //单位为角度
+  float   mInclinometer1_y;     //单位为角度
+
+  float   mSiko1;            //单位为毫米
+  float   mSiko2;
+  float    mEncoderTurns;     //单位为角度*1000。
+  //四个电机速度
+  float    mSpeed[4];           //单位为:度/s
+  float    mTension;         //单位为g
+} ARMS_R_USE_MSG;
 
 //定义无线拉力计控制板接收消息
 typedef struct
@@ -600,6 +649,33 @@ typedef struct{
   pthread_mutex_t             mArmsNowDatasMutex;
 } SuprDataToInteraction;
 
+////////////////////////////////控制算法数据///////////////////////////////////////////////////
+typedef struct
+{
+  /******************初始参数***********************/
+  //悬掉重物质量，控制周期、旋转臂长、转动惯量、弹簧弹性系数、绳索卷筒半径、减速机的减速比、三周期传感器角速度、三周期传感器拉力、重力加速度、阻尼系数、角速度、K1系数
+  float mM, dt, mL, mJ, mK, mR, mNdecrease, alfa_reco[3],F_reco[3],mG,mCo,mWn,mK1;
+
+  /*******************随动算法数据*******************/
+  //绳索末端之前位置
+  BASE::POS_2  mRopeEndLastPos, mRopeEndLastLastPos;
+
+  /*********************拉力平衡算法*********************/
+  //摆角，角速度，角加速度。弧度
+  float alfi_measure, d_alfi_measure, ddalfi_measure;
+
+  //绳索释放加速度,电机释放角速度,上一个周期释放绳索加速度
+  float dd_Lz, d_w, last_dd_Lz;
+  //估算拉力值,拉力计拉力值，拉力计倒数
+  float f_estimate,f_measure,d_f_measure;
+
+  //控制电机速度,上一时刻电机速度
+  float mMagicV, mLastV;
+
+  //运行初始化
+  int  mStep;
+}MagicControlData;
+
 /////////////////////////////////整个系统中线程定义 //////////////////////////////////////////////
 //线程结构体头，线程运行期间必须的参数 Each thread runs parameters
 typedef struct
@@ -651,6 +727,8 @@ typedef struct: public THREAD_INFO_HEADER
 
   bool            mNewRecMsg;
   ARMS_R_MSG      mRecMsg;
+  ARMS_R_USE_MSG  mRecUseMsg;
+
   ARMS_S_MSG      mSendMsg;
   pthread_mutex_t mArmsMsgMutex;
   pthread_cond_t  mArmsMsgReady;
@@ -674,6 +752,9 @@ typedef struct: public THREAD_INFO_HEADER
 
   //线程在每个状态下运行条件
   BASE::M_STATE_CONDITIONS mCond;
+
+////////////控制算法需要的数据////////////////////////////////
+  BASE::MagicControlData mMagicControl;
 
   //随即码
   uint16_t   mRandomCode;

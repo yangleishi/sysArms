@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <math.h>
 
 #include "sys_arms_supr.hpp"
 #include "sys_arms_conf.hpp"
@@ -288,6 +289,7 @@ static int32_t startModules(void) {
   // arms threads
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < DEF_SYS_USE_ARMS_NUMS+1; qIdx++)
   {
+    //结构体
     mArmsModule[qIdx-1].mWorking = true;
     mArmsModule[qIdx-1].mLogQueue = mLogQueue;
     strcpy(mArmsModule[qIdx-1].mThreadName, CONF::MN_NAME[qIdx]);
@@ -308,6 +310,25 @@ static int32_t startModules(void) {
                                                  CONF::PRI_LEAD,
                                                  &(mArmsModule[qIdx-1]));
     usleep(10000);
+  }
+
+  // arms threads初始化机械臂控制算法参数
+  for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < DEF_SYS_USE_ARMS_NUMS+1; qIdx++)
+  {
+    memset((char*)&mArmsModule[qIdx-1].mMagicControl, 0, sizeof (mArmsModule[qIdx-1].mMagicControl));
+    mArmsModule[qIdx-1].mMagicControl.dt = ((float)CONF::nDelay)/1000000.0;
+    mArmsModule[qIdx-1].mMagicControl.mG = 9.8;
+    mArmsModule[qIdx-1].mMagicControl.mK = 400;
+    mArmsModule[qIdx-1].mMagicControl.mL = 0.2;
+    mArmsModule[qIdx-1].mMagicControl.mM = 15.57;
+    mArmsModule[qIdx-1].mMagicControl.mJ = 1.5*pow((mArmsModule[qIdx-1].mMagicControl.mL/2), 2.0);
+    mArmsModule[qIdx-1].mMagicControl.mR = 0.06;
+    mArmsModule[qIdx-1].mMagicControl.mCo = 0.8;
+    mArmsModule[qIdx-1].mMagicControl.mK1 = mArmsModule[qIdx-1].mMagicControl.mM* mArmsModule[qIdx-1].mMagicControl.mL + mArmsModule[qIdx-1].mMagicControl.mJ/mArmsModule[qIdx-1].mMagicControl.mL;
+    mArmsModule[qIdx-1].mMagicControl.mWn = 10;
+    mArmsModule[qIdx-1].mMagicControl.mNdecrease = 50;
+    mArmsModule[qIdx-1].mMagicControl.alfa_reco[0] = 0;mArmsModule[qIdx-1].mMagicControl.alfa_reco[1] = 0;mArmsModule[qIdx-1].mMagicControl.alfa_reco[2] = 0;
+    mArmsModule[qIdx-1].mMagicControl.F_reco[0] = 0;mArmsModule[qIdx-1].mMagicControl.F_reco[1] = 0;mArmsModule[qIdx-1].mMagicControl.F_reco[2] = 0;
   }
 
 // tension threads
@@ -608,15 +629,14 @@ static void changeState()
 static int32_t suprMainLoop(){
   //TODU
   struct timespec now, next, interval;
-  unsigned int nDelay = 4000;        /* usec */
 
   int  ret;
 
   while(suprWorking)
   {
     /* Retrieve current value of CLOCK_REALTIME clock */
-    interval.tv_sec  = nDelay / USEC_PER_SEC;
-    interval.tv_nsec = (nDelay % USEC_PER_SEC) * 1000;
+    interval.tv_sec  = CONF::nDelay / USEC_PER_SEC;
+    interval.tv_nsec = (CONF::nDelay % USEC_PER_SEC) * 1000;
     if (clock_gettime(CLOCK_MONOTONIC, &now) == -1)
         continue;
 

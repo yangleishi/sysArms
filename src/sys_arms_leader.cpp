@@ -24,6 +24,9 @@
 #include "sys_arms_loger.hpp"
 #include "sys_arms_daemon.hpp"
 
+static float vi = 1;
+static float vs = 0;
+
 namespace LEADER {
 
 BASE::MOTORS mNowMotors = {0};
@@ -34,6 +37,8 @@ static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdNonblocking(int sockfd);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mStartSysTime, BASE::SYS_TIME  mEndSysTime);
+static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule);
+static int32_t checkRecMsgError(BASE::ARMS_THREAD_INFO *pTModule);
 static void setStateCond(BASE::M_STATE_CONDITIONS &tCond, BASE::M_STATE tState, uint16_t tMotorCmd, int16_t  tCycTimes, uint16_t  tWaitAck);
 
 static int moduleEndUp(BASE::ARMS_THREAD_INFO *pTModule);
@@ -47,8 +52,14 @@ static int32_t checkHardError(uint16_t mStatusCode);
 //pTmodule cmd or data send to client
 static int motorMoveAllCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl);
 static int motorMoveXYZCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl, uint8_t mDirection, uint8_t mPosOrVel);
+static int motorMoveXYCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_2 mVel, uint8_t mCtrl);
+static int motorMoveXYZWCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 mVel, uint8_t mCtrl);
+
 
 static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors);
+
+static BASE::ACC_2 pidGetDa(BASE::ANGLE_2 mNowAngle, BASE::POS_2 mLastPos, BASE::POS_2 mLastLastPos, float ropeL, float dT);
+static BASE::POS_2 getPosBaseAngle(BASE::ANGLE_2 mNowAngle, float ropeL);
 
 static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule, int devInt);
 
@@ -57,6 +68,13 @@ static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule);
 static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule);
 static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule);
 static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule);
+
+//算法随动、拉力算法
+static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule);
+static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule);
+
+static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 &mVel);
+
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -163,6 +181,36 @@ static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mS
   mSysDelayed.mIsValid = 1;
 }
 
+static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  //编码器重整
+  if(pTModule->mRecMsg.mEncoderTurns > DEF_SYS_ENCODER_MAX)
+    pTModule->mRecMsg.mEncoderTurns -= 360000;
+
+  pTModule->mRecMsg.mEncoderTurns -= DEF_SYS_ENCODER_ZERO;
+
+  //数据转换成浮点型
+  pTModule->mRecUseMsg.mSpeed[0] = ((float)pTModule->mRecMsg.mMotors[0].mSpeed)*0.01745;
+  pTModule->mRecUseMsg.mSpeed[1] = ((float)pTModule->mRecMsg.mMotors[1].mSpeed)*0.01745;
+  pTModule->mRecUseMsg.mSpeed[2] = ((float)pTModule->mRecMsg.mMotors[2].mSpeed)*0.01745;
+  pTModule->mRecUseMsg.mSpeed[3] = ((float)pTModule->mRecMsg.mMotors[3].mSpeed)*0.01745;
+
+  pTModule->mRecUseMsg.mEncoderTurns = ((float)pTModule->mRecMsg.mEncoderTurns)*0.00001745;
+  pTModule->mRecUseMsg.mTension      = ((float)pTModule->mRecMsg.mTension) * 0.0098;
+  pTModule->mRecUseMsg.mSiko1       = ((float)pTModule->mRecMsg.mSiko1) / 1000.0;
+  pTModule->mRecUseMsg.mSiko2       = ((float)pTModule->mRecMsg.mSiko2) / 1000.0;
+
+  //采集三周期数据
+  //存储摆动角、拉力值
+  for (int i=2; i>=1; --i)
+  {
+    pTModule->mMagicControl.alfa_reco[i] = pTModule->mMagicControl.alfa_reco[i-1];
+    pTModule->mMagicControl.F_reco[i] = pTModule->mMagicControl.F_reco[i-1];
+  }
+  pTModule->mMagicControl.alfa_reco[0] = pTModule->mRecUseMsg.mEncoderTurns;
+  pTModule->mMagicControl.F_reco[0] = pTModule->mRecUseMsg.mTension;
+}
+
 /******************************************************************************
 * 功能：组包函数，将motor电机控制结构，组成ARMS_S_MSG类型消息
 * @param pMsg : pMsg是发送给机械臂控制板的消息，
@@ -194,8 +242,7 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t
 
   //TUDO
 
-  pMsg->mCrcCodeH = 0;
-  pMsg->mCrcCodeL = 0;
+  pMsg->mCrcCode = 0;
 
   return iRet;
 }
@@ -250,6 +297,36 @@ static int motorMoveXYZCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMoto
     }
     mMotors.mMotorsCmd[3].mCmd = BASE::CT_MOTOR_STOP;
 
+    iRet = motorCmd(pTModule, mMotors);
+    return  iRet;
+}
+
+static int motorMoveXYCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_2 mVel, uint8_t mCtrl)
+{
+    int32_t iRet = 0;
+    BASE::MOTORS mMotors;
+    //ctrl cmd motor
+    mMotors.mMotorsCmd[0].mCmd = mCtrl;
+    mMotors.mMotorsCmd[1].mCmd = mCtrl;
+    mMotors.mMotorsCmd[2].mCmd = BASE::CT_MOTOR_STOP;
+    mMotors.mMotorsCmd[3].mCmd = BASE::CT_MOTOR_STOP;
+    mMotors.mMotorsCmd[0].mSpeed = mVel.x;
+    mMotors.mMotorsCmd[1].mSpeed = mVel.y;
+    iRet = motorCmd(pTModule, mMotors);
+    return  iRet;
+}
+
+static int motorMoveXYZWCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 mVel, uint8_t mCtrl)
+{
+    int32_t iRet = 0;
+    BASE::MOTORS mMotors = {0};
+    //ctrl cmd motor. speed 单位是 脉冲/s
+    for (int i=0; i<4; ++i)
+    {
+      mMotors.mMotorsCmd[i].mCmd = mCtrl;
+      mMotors.mMotorsCmd[i].mSpeed = (int32_t)(mVel.v[i] * DEF_SYS_RADIAN_TO_PULSE);
+    }
+    //printf("v:%d %d %d %d\n",mMotors.mMotorsCmd[0].mSpeed,mMotors.mMotorsCmd[1].mSpeed,mMotors.mMotorsCmd[2].mSpeed,mMotors.mMotorsCmd[3].mSpeed);
     iRet = motorCmd(pTModule, mMotors);
     return  iRet;
 }
@@ -317,7 +394,6 @@ static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule, int devInt)
   return  iRet;
 }
 
-
 /******************************************************************************
 * 功能：leader处于初始化状态下，循环调用的函数，主要是检查arms状态，上电机械臂电机
 * @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针
@@ -381,7 +457,7 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
          abs(pTModule->mRecMsg.mMotors[3].mPosition-mNowMotors.mMotorsCmd[3].mPosition) > 0.001 )
       {
           motorMoveAllCmd(pTModule, mNowMotors, BASE::CT_MOTOR_MOVE_POSITIVE);
-          printf("conf motor cmd postion:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
+          printf("conf motor cmd postion:%d, now postion:%d\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
           //send rec running data to uper
           pTModule->mReadLiftSigalNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
           pTModule->mReadLiftSigalNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
@@ -402,7 +478,7 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
          abs(pTModule->mRecMsg.mMotors[2].mPosition-mNowMotors.mMotorsCmd[2].mPosition) > 0.001)
       {
           motorMoveXYZCmd(pTModule, mNowMotors, BASE::CT_MOTOR_MOVE_POSITIVE, 0, 0);
-          printf("conf motor all move postion:%f, now postion:%f\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
+          printf("conf motor all move postion:%d, now postion:%d\n",  mNowMotors.mMotorsCmd[0].mPosition, pTModule->mRecMsg.mMotors[0].mPosition);
           //send rec running data to uper
           pTModule->mReadLiftSigalNowData.mHandXMoveNow = pTModule->mRecMsg.mMotors[0].mPosition;
           pTModule->mReadLiftSigalNowData.mHandYMoveNow = pTModule->mRecMsg.mMotors[1].mPosition;
@@ -455,7 +531,26 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
       float tensiosV = readTensionValue(pTModule,  pTModule->mRecMsg.mIdentifier);
       pTModule->mReadRunData.runD_PullNow = tensiosV;
       copyArmsRunDatas(pTModule->mRecMsg, pTModule->mReadRunData);
-      motorMoveAllCmd(pTModule, lMotors, BASE::CT_MOTOR_MOVE_POSITIVE);
+
+      //PID算法,随动算法
+      BASE::ANGLE_2 mAg;//需要根据磁栅尺计算当前XY偏角
+      BASE::VEL_2 mCmdV;
+      BASE::ACC_2 mAcc = pidGetDa(mAg, pTModule->mMagicControl.mRopeEndLastPos, pTModule->mMagicControl.mRopeEndLastLastPos, CONF::ROPE_LEN, 0.01);
+      pTModule->mMagicControl.mRopeEndLastLastPos = pTModule->mMagicControl.mRopeEndLastPos;
+      pTModule->mMagicControl.mRopeEndLastPos = getPosBaseAngle(mAg, CONF::ROPE_LEN);
+      mCmdV.x = pTModule->mRecMsg.mMotors[0].mSpeed + mAcc.x*0.01;
+      mCmdV.y = pTModule->mRecMsg.mMotors[1].mSpeed + mAcc.y*0.01;
+
+      //平面XY随动控制
+      //motorMoveXYCmd(pTModule, mCmdV, BASE::CT_MOTOR_MOVE_V_CURVE);
+
+      //拉力控制算法
+      BASE::VEL_4 mCmdV4 = {0};
+      pullMagic(pTModule);//函数计算出收放收缩加速度。
+      //这个函数必须在pullMagic或者followMagic函数之后调用
+      getV(pTModule, mCmdV4);
+
+      motorMoveXYZWCmd(pTModule, mCmdV4, BASE::CT_MOTOR_MOVE_POSITIVE);
       printf("run motor all running\n");
       break;
     }
@@ -574,14 +669,80 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
     }
     case BASE::CMD_INTO_COND_RUN:
     {
-      //printf("cond running....\n");
+      printf("cond running....\n");
       break;
     }
     default:
     {
       BASE::MOTORS mZeroMotors = {0};
       //LOGER::PrintfLog(BASE::S_APP_LOGER,"wait cmd....  send:%d , rec:%d", pTModule->mRandomCode, pTModule->mRecMsg.mRandomCode);
-      motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_STOP);
+#if 0
+      //测试电机控制性能
+      //printf("size:%d\n", sizeof(pTModule->mSendMsg));
+      vs = 15*vi;
+      //vs = 1000;
+      static int intstep = 1, timeS = 1;
+
+      if(vi > 200 || vi < -200)
+      {
+        intstep *= -1;
+      }
+
+      printf("%d %.3f %d %d %d, 拉力:%d g 编码器:%d pos:%d\n",timeS, vs, pTModule->mRecMsg.mMotors[1].mSpeed, pTModule->mRecMsg.mMotors[2].mSpeed,
+                                          pTModule->mRecMsg.mMotors[3].mSpeed, pTModule->mRecMsg.mTension, pTModule->mRecMsg.mEncoderTurns,
+                                          pTModule->mRecMsg.mMotors[3].mPosition);
+
+      //if(pTModule->mRecMsg.mTension < 45000)
+          //printf("**************************\n");
+      //printf("%d %.3f %d\n",timeS, vs, pTModule->mRecMsg.mMotors[3].mSpeed);
+
+      vi += intstep;
+      timeS++;
+
+      //mZeroMotors.mMotorsCmd[1].mSpeed = (int32_t)(vs*MOTOR_V_TO_S);
+      //mZeroMotors.mMotorsCmd[2].mSpeed = (int32_t)(vs*MOTOR_V_TO_S);
+      mZeroMotors.mMotorsCmd[3].mSpeed = (int32_t)(vs*MOTOR_V_TO_S);
+      motorMoveAllCmd(pTModule, mZeroMotors, BASE::CT_MOTOR_MOVE_POSITIVE);
+#endif
+
+//测试拉力算法
+#if 1
+      static int ii = 0;
+      ii++;
+      //拉力控制算法
+      BASE::VEL_4 mCmdV4 = {0};
+
+      //缓冲200个周期在启动控制算法
+      if(ii > 200)
+      {
+          pullMagic(pTModule);//函数计算出收放收缩加速度。
+          //这个函数必须在pullMagic或者followMagic函数之后调用
+          getV(pTModule, mCmdV4);
+          ii = 600;
+      }
+      printf("拉力:%d g 编码器:%d iV:%f mV:%d\n", pTModule->mRecMsg.mTension, pTModule->mRecMsg.mEncoderTurns,mCmdV4.v[0], (pTModule->mRecMsg.mMotors[0].mSpeed));
+      motorMoveXYZWCmd(pTModule, mCmdV4, BASE::CT_MOTOR_MOVE_POSITIVE);
+#endif
+
+      /*
+      static int ii = 0;
+      ii++;
+
+      printf("拉力:%d g 编码器:%d  mV:%d\n", pTModule->mRecMsg.mTension, pTModule->mRecMsg.mEncoderTurns, pTModule->mRecMsg.mMotors[0].mSpeed);
+      BASE::VEL_4 mCmdV4 = {0};
+      if(ii > 100000)
+      {
+        mCmdV4.v[0] = 0;
+      }else
+      {
+        mCmdV4.v[0] = 10;
+      }
+      //pullMagic(pTModule);//函数计算出收放收缩加速度。
+      //这个函数必须在pullMagic或者followMagic函数之后调用
+      //getV(pTModule, mCmdV4);
+      motorMoveXYZWCmd(pTModule, mCmdV4, BASE::CT_MOTOR_MOVE_POSITIVE);
+      */
+
       break;
     }
   }
@@ -616,6 +777,45 @@ static uint16_t copyArmsRunDatas(BASE::ARMS_R_MSG mRecMsg, BASE::ReadRunAllData 
   mRunDatas.runD_RencoderZNow = mRecMsg.mMotors[2].mEncoderTurns;
 }
 
+/******************************************************************************
+* 功能：根据摆动角度，绳索长度得到位置
+* @param mNowAngle : mNowAngle是绳索X Y方向角度，单位弧度
+* @param ropeL : ropeL是绳索的长度单位m
+* @return Descriptions
+******************************************************************************/
+static BASE::POS_2 getPosBaseAngle(BASE::ANGLE_2 mNowAngle, float ropeL)
+{
+    BASE::POS_2 iRet = {0,0};
+    iRet.x = ropeL*sin(mNowAngle.x);
+    iRet.y = ropeL*sin(mNowAngle.y);
+    return iRet;
+}
+
+/******************************************************************************
+* 功能：随动控制PID算法
+* @param angleX : angleX是绳索X方向角度，单位弧度
+* @param angleY : angleY是绳索Y方向角度，单位弧度
+* @param ropeL : ropeL是绳索的长度单位m
+* @param dT : dT是控制周期，单位s
+* @return Descriptions
+******************************************************************************/
+static BASE::ACC_2 pidGetDa(BASE::ANGLE_2 mNowAngle, BASE::POS_2 mLastPos, BASE::POS_2 mLastLastPos, float ropeL, float dT)
+{
+    BASE::ACC_2 iRet;
+    BASE::POS_2 dPos = {0.0,0.0},dlastPos = {0.0,0.0};
+    dPos.x = ropeL* sin(mNowAngle.x) - mLastPos.x;
+    dPos.y = ropeL* sin(mNowAngle.y) - mLastPos.y;
+
+    dlastPos.x = mLastPos.x - mLastLastPos.x;
+    dlastPos.y = mLastPos.y - mLastLastPos.y;
+    //判断Dpos大小是否超出范围
+    ;;
+
+    iRet.x = CONF::PID_P_FOLLOWUP * dPos.x + CONF::PID_D_FOLLOWUP*(dPos.x-dlastPos.x)/dT;
+    iRet.y = CONF::PID_P_FOLLOWUP * dPos.y + CONF::PID_D_FOLLOWUP*(dPos.y-dlastPos.y)/dT;
+
+    return iRet;
+}
 /******************************************************************************
 * 功能：机械臂在运行模式下周期调用的函数，包含系统检测，控制命令发送，运动数据拷贝等
 * @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针等
@@ -700,6 +900,87 @@ static void setStateCond(BASE::M_STATE_CONDITIONS &tCond, BASE::M_STATE tState, 
   tCond.mCycTimes = tCycTimes;
   tCond.mWaitAck  = tWaitAck;
 }
+
+/******************************************************************************
+* 功能：拉力平衡算法
+* @param pTModule : pTModule是线程结构体
+* @return Descriptions
+******************************************************************************/
+static int32_t checkRecMsgError(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  static int32_t iRet = 0;
+  //检查拉力是否出错
+  float mTempL =  (float)pTModule->mRecMsg.mTension;
+  if(mTempL < 0 || mTempL/(pTModule->mMagicControl.mM*1000) < 0.9)
+    iRet = -1;
+
+  return iRet;
+}
+
+/******************************************************************************
+* 功能：拉力平衡算法
+* @param pTModule : pTModule是线程结构体
+* @return Descriptions
+******************************************************************************/
+static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  BASE::MagicControlData *pControl = &(pTModule->mMagicControl);
+  //计算拉力 摆动角度导数
+  pControl->d_f_measure = (pControl->F_reco[0] - pControl->F_reco[1])/pControl->dt;
+  pControl->d_alfi_measure = (pControl->alfa_reco[0] - pControl->alfa_reco[1])/pControl->dt;
+  pControl->ddalfi_measure = (pControl->alfa_reco[0] - 2*pControl->alfa_reco[1] + pControl->alfa_reco[2])/(pControl->dt*pControl->dt);
+
+  //printf("************* ddalfi_measure:%f alfa_reco:%f %f %f\n",
+  //                       pControl->ddalfi_measure, pControl->alfa_reco[0], pControl->alfa_reco[1], pControl->alfa_reco[2]);
+
+  float alfa_m = pControl->alfa_reco[0];
+  if(abs(alfa_m) < 1.5/60)
+  {
+    alfa_m = 0;
+  }
+  //对外力进行估算
+  pControl->f_estimate = -pControl->mK1 * pControl->ddalfi_measure - pControl->mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
+
+
+
+  pControl->dd_Lz = (-pControl->f_estimate + 0.2*pControl->d_f_measure)/pControl->mM  +
+                    0.2*((2*pControl->mCo*pControl->mWn*pControl->d_alfi_measure+pow(pControl->mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/pControl->mM;
+
+
+  //pControl->dd_Lz = (-pControl->f_estimate + (pControl->F_reco[0]-pControl->mM*pControl->mG)*2 + 0.4*pControl->d_f_measure)/pControl->mM;
+
+
+
+  //得到电机的加速度
+  pControl->last_dd_Lz = pControl->dd_Lz;
+  //绳索的加速度
+  pControl->d_w = pControl->dd_Lz/pControl->mR * pControl->mNdecrease;
+
+  //printf("dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f d_w:%f  f_re:%f %f %f\n",
+  //        pControl->dd_Lz, pControl->f_estimate, pControl->d_f_measure, pControl->d_alfi_measure, alfa_m,pControl->d_w, pControl->F_reco[0], pControl->F_reco[1],pControl->F_reco[2]);
+}
+static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
+{
+    return 0;
+}
+
+static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 &mVel)
+{
+  int32_t iRet = 0;
+  //计算收放绳子电机要执行的速度，rad/s
+  float mNowV = ((float)pTModule->mRecMsg.mMotors[0].mSpeed) * DEF_SYS_DEGREE_TO_RADIAN;
+  //单位为 rad/s
+  mVel.v[0] = pTModule->mMagicControl.d_w*pTModule->mMagicControl.dt + mNowV;
+  //检查机械臂是否有错
+  if(checkRecMsgError(pTModule) < 0)
+  {
+    printf("************* mVel:%f , error:%d \n", mVel.v[0], checkRecMsgError(pTModule));
+    mVel.v[0] = 0;
+  }
+  //printf("************* mVel:%f > 31, error:%d d_w:%f mNowv: %f, d_w:%f, dt:%f \n", mVel.v[0], checkRecMsgError(pTModule),pTModule->mMagicControl.d_w,  mNowV,
+  //                        pTModule->mMagicControl.d_w, pTModule->mMagicControl.dt);
+  return iRet;
+}
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -744,7 +1025,9 @@ void* threadEntry(void* pModule)
     //rec msg
     memset((char*)&pTModule->mRecMsg, 0 ,sizeof(pTModule->mRecMsg));
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-
+    //
+    //printf("%d \n", pTModule->mRecMsg.mEncoderTurns);
+    reformRecMsg(pTModule);
     calSysDelayed(pTModule->mReadLiftHzData, mSysSendTime, pTModule->mRecMsg.mSysTime);
     //printf("system delayed: %ds, %dus, now: \n",pTModule->mSysDelayed.mSysTimeS, pTModule->mSysDelayed.mSysTimeUs);
 
@@ -786,10 +1069,11 @@ void* threadEntry(void* pModule)
           perror("this");
           break;
         }
-        LOGER::PrintfLog(BASE::S_APP_LOGER, "时间:%d %d,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d",
+        LOGER::PrintfLog(BASE::S_APP_LOGER, "时间:%d %d,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d,v1:%f,v2:%f,v3:%f,v4:%f",
                                              pTModule->mRecMsg.mSysTime.mSysTimeS, pTModule->mRecMsg.mSysTime.mSysTimeUs, pTModule->mRecMsg.mRandomCode,
                                              pTModule->mRecMsg.mSwitchTiggers,pTModule->mRecMsg.mInclinometer1_x, pTModule->mRecMsg.mInclinometer1_y,
-                                             pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,pTModule->mRecMsg.mEncoderTurns,pTModule->mRecMsg.mTension);
+                                             pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,pTModule->mRecMsg.mEncoderTurns,pTModule->mRecMsg.mTension,
+                                             pTModule->mRecMsg.mMotors[0].mSpeed, pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[3].mSpeed);
         confFire(pTModule);
         break;
       }
