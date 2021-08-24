@@ -19,6 +19,10 @@
 #include <errno.h>
 #include <math.h>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdarg.h>
+
 #include "sys_arms_leader.hpp"
 #include "sys_arms_defs.h"
 #include "sys_arms_loger.hpp"
@@ -34,10 +38,14 @@ static float mCmdTension = 0;
 static BASE::SYS_TIME  mSysSendTime = {0};
 
 static int  initServer(BASE::ARMS_THREAD_INFO *pTModule);
+static int  readInit(BASE::ARMS_THREAD_INFO *pTModule);
 static void setFdNonblocking(int sockfd);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
+static int32_t getIniKeyValue(char *key, char* mnName, char *filename, float* value);
+
 static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mStartSysTime, BASE::SYS_TIME  mEndSysTime);
 static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule);
+static void calibrationSensors(BASE::ARMS_THREAD_INFO *pTModule);
 static int32_t checkRecMsgError(BASE::ARMS_THREAD_INFO *pTModule);
 static void setStateCond(BASE::M_STATE_CONDITIONS &tCond, BASE::M_STATE tState, uint16_t tMotorCmd, int16_t  tCycTimes, uint16_t  tWaitAck);
 
@@ -111,6 +119,59 @@ static void setFdTimeout(int sockfd, const int mSec, const int mUsec)
     LOGER::PrintfLog(BASE::S_APP_LOGER, "setsockopt failed:");
 }
 
+static int32_t getIniKeyValue(char *key, char* mnName, char *filename, float* value)
+{
+  FILE *fp;
+
+  char readbuf[512] = {0};
+  char findbuf[100] = {0};
+  strcpy(findbuf, mnName);
+  strcat(findbuf, ".");
+  strcat(findbuf, key);
+  char *retbuf;
+  retbuf = (char *)malloc(20);
+  int line = 0;
+
+  if((fp = fopen(filename, "r")) == NULL)
+  {
+    printf("have  no  such   file \n");
+    return -1;
+  }
+  while(fgets(readbuf, sizeof(readbuf), fp)) //逐行循环读取文件，直到文件结束
+  {
+    line++;
+    if(!strncmp(readbuf, "#" ,1) || !strncmp(readbuf,"\n",1)) //忽略注释(#)和空行
+      continue;
+    if(strstr(readbuf, findbuf))     //查找配置文件名
+    {
+      char *p = strchr(readbuf, '=');  //确定“=”位置
+      do
+        p += 1;
+      while(*p == ' ');
+
+      sprintf(retbuf,"%s",p);
+      printf("*****  %s\n", retbuf);
+      *value = atof(retbuf);
+     }
+   }
+   fclose(fp);
+}
+
+
+static int readInit(BASE::ARMS_THREAD_INFO *pTModule)
+{
+    memset((char*)&pTModule->mMagicControl, 0, sizeof (pTModule->mMagicControl));
+    pTModule->mMagicControl.dt = ((float)CONF::nDelay)/1000000.0;
+    getIniKeyValue((char*)"mG", pTModule->mThreadName, (char*)"arms.ini", (float*)&(pTModule->mMagicControl.mG));
+    getIniKeyValue((char*)"mK",pTModule->mThreadName, (char*)"arms.ini", (float*)&pTModule->mMagicControl.mK);
+    getIniKeyValue((char*)"mL",pTModule->mThreadName, (char*)"arms.ini", (float*)&pTModule->mMagicControl.mL);
+    getIniKeyValue((char*)"mM",pTModule->mThreadName, (char*)"arms.ini", (float*)&pTModule->mMagicControl.mM);
+    getIniKeyValue((char*)"mWn",pTModule->mThreadName, (char*)"arms.ini", (float*)&pTModule->mMagicControl.mWn);
+    getIniKeyValue((char*)"mNdecrease",pTModule->mThreadName, (char*)"arms.ini", (float*)&pTModule->mMagicControl.mNdecrease);
+    getIniKeyValue((char*)"mR",pTModule->mThreadName, (char*)"arms.ini", (float*)&pTModule->mMagicControl.mR);
+    getIniKeyValue((char*)"mCo",pTModule->mThreadName, (char*)"arms.ini", (float*)&pTModule->mMagicControl.mCo);
+}
+
 /******************************************************************************
 * 功能：此函数初始化模块，初始化套接字，绑定ip端口，主要和机械臂底层板对接
 * @param pTModule : pTModule是线程信息结构体指针，里边存储的线程运行期间用到的数据和交换通信数据
@@ -124,6 +185,9 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
       LOGER::PrintfLog(BASE::S_APP_LOGER, "socket creat Failed");
       return -1;
   }
+
+  //读取arms控制算法初始配置
+  readInit(pTModule);
 
   //setFdNonblocking(pTModule->mSocket);
   setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TIMEOUT_S, CONF::SERVER_UDP_TIMEOUT_US);
@@ -181,13 +245,44 @@ static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mS
   mSysDelayed.mIsValid = 1;
 }
 
+/******************************************************************************
+* 功能：标定编码器0值，设置重物的初始重量，调用此函数时必须将重物吊起来，编码器使用弹簧拉正
+* @param pTModule : pTModule是结构体中。
+* @return Descriptions
+******************************************************************************/
+static void calibrationSensors(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  if(pTModule->mMagicControl.mIsEncoderZero == 0)
+  {
+    pTModule->mMagicControl.mEncoderZero = pTModule->mRecMsg.mEncoderTurns;
+    pTModule->mMagicControl.mIsEncoderZero = 1;
+    printf("****  %d \n", pTModule->mRecMsg.mEncoderTurns);
+  }
+
+  if(pTModule->mMagicControl.mIsTensionZero == 0)
+  {
+    pTModule->mMagicControl.mM = ((float)pTModule->mRecMsg.mTension)/1000.0;
+    pTModule->mMagicControl.mIsTensionZero = 1;
+
+    //计算算法运行初始值
+    pTModule->mMagicControl.mJ = 1.5*pow((pTModule->mMagicControl.mL/2), 2.0);
+    pTModule->mMagicControl.mK1 = pTModule->mMagicControl.mM* pTModule->mMagicControl.mL + pTModule->mMagicControl.mJ/pTModule->mMagicControl.mL;
+    printf("****  %f \n", pTModule->mMagicControl.mM);
+  }
+}
+
+/******************************************************************************
+* 功能：此函数将采集机械臂板子上数据转换成标准单位，每个周期都会调用
+* @param pTModule : pTModule是结构体中。
+* @return Descriptions
+******************************************************************************/
 static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
 {
-  //编码器重整
+  //编码器重整,
   if(pTModule->mRecMsg.mEncoderTurns > DEF_SYS_ENCODER_MAX)
     pTModule->mRecMsg.mEncoderTurns -= 360000;
 
-  pTModule->mRecMsg.mEncoderTurns -= DEF_SYS_ENCODER_ZERO;
+  pTModule->mRecMsg.mEncoderTurns -= pTModule->mMagicControl.mEncoderZero;
 
   //数据转换成浮点型
   pTModule->mRecUseMsg.mSpeed[0] = ((float)pTModule->mRecMsg.mMotors[0].mSpeed)*0.01745;
@@ -207,8 +302,17 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
     pTModule->mMagicControl.alfa_reco[i] = pTModule->mMagicControl.alfa_reco[i-1];
     pTModule->mMagicControl.F_reco[i] = pTModule->mMagicControl.F_reco[i-1];
   }
+
+  //编码器滤波,等新的编码器过来后测试
+  /*
+  if(abs(pTModule->mRecUseMsg.mEncoderTurns - pTModule->mMagicControl.alfa_reco[1]) > 0.005)
+    pTModule->mMagicControl.alfa_reco[0] = pTModule->mMagicControl.alfa_reco[1];
+  else
+    pTModule->mMagicControl.alfa_reco[0] = pTModule->mRecUseMsg.mEncoderTurns;
+  */
+
   pTModule->mMagicControl.alfa_reco[0] = pTModule->mRecUseMsg.mEncoderTurns;
-  pTModule->mMagicControl.F_reco[0] = pTModule->mRecUseMsg.mTension;
+  pTModule->mMagicControl.F_reco[0] = pTModule->mRecUseMsg.mTension; 
 }
 
 /******************************************************************************
@@ -436,6 +540,8 @@ static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule)
     motorCmd(pTModule, lMotors);
     LOGER::PrintfLog(BASE::S_APP_LOGER, "send stop to motors!");
   }
+  //编码器找零值
+  calibrationSensors(pTModule);
   return iRet;
 }
 
@@ -710,7 +816,7 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
       static int ii = 0;
       ii++;
       //拉力控制算法
-      BASE::VEL_4 mCmdV4 = {0};
+      BASE::VEL_4 mCmdV4 = {0.0};
 
       //缓冲200个周期在启动控制算法
       if(ii > 200)
@@ -720,7 +826,17 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
           getV(pTModule, mCmdV4);
           ii = 600;
       }
-      printf("拉力:%d g 编码器:%d iV:%f mV:%d\n", pTModule->mRecMsg.mTension, pTModule->mRecMsg.mEncoderTurns,mCmdV4.v[0], (pTModule->mRecMsg.mMotors[0].mSpeed));
+      //上升
+      //mCmdV4.v[0] = 0;
+
+      //下降
+      //mCmdV4.v[0] =20;
+
+      //算法降速
+      mCmdV4.v[0] /= 5.0;
+      printf("拉力:%d g 编码器:%d iV:%f oV:%f\n", pTModule->mRecMsg.mTension, pTModule->mRecMsg.mEncoderTurns, (double)mCmdV4.v[0], (pTModule->mRecUseMsg.mSpeed[0]));
+      //printf("%d %d %f %f\n", pTModule->mRecMsg.mTension, pTModule->mRecMsg.mEncoderTurns, (double)mCmdV4.v[0], (pTModule->mRecUseMsg.mSpeed[0]));
+      LOGER::PrintfLog(BASE::S_APP_LOGER, "%f %f %f %f", pTModule->mRecUseMsg.mTension, pTModule->mRecUseMsg.mEncoderTurns, (double)mCmdV4.v[0], (pTModule->mRecUseMsg.mSpeed[0]));
       motorMoveXYZWCmd(pTModule, mCmdV4, BASE::CT_MOTOR_MOVE_POSITIVE);
 #endif
 
@@ -911,8 +1027,11 @@ static int32_t checkRecMsgError(BASE::ARMS_THREAD_INFO *pTModule)
   static int32_t iRet = 0;
   //检查拉力是否出错
   float mTempL =  (float)pTModule->mRecMsg.mTension;
-  if(mTempL < 0 || mTempL/(pTModule->mMagicControl.mM*1000) < 0.9)
+  if(mTempL < 0 || (mTempL/(pTModule->mMagicControl.mM*1000)) < 0.5)
+  {
     iRet = -1;
+    printf("chaochu:%f  %f\n", mTempL, (mTempL/(pTModule->mMagicControl.mM*1000)));
+  }
 
   return iRet;
 }
@@ -941,15 +1060,17 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //对外力进行估算
   pControl->f_estimate = -pControl->mK1 * pControl->ddalfi_measure - pControl->mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
 
+  //printf("mK1:%f mM:%f last_dd_Lz:%f mK:%f  mL:%f\n",
+  //        pControl->mK1, pControl->mM, pControl->last_dd_Lz, pControl->mK, pControl->mL);
 
 
   pControl->dd_Lz = (-pControl->f_estimate + 0.2*pControl->d_f_measure)/pControl->mM  +
                     0.2*((2*pControl->mCo*pControl->mWn*pControl->d_alfi_measure+pow(pControl->mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/pControl->mM;
 
-
   //pControl->dd_Lz = (-pControl->f_estimate + (pControl->F_reco[0]-pControl->mM*pControl->mG)*2 + 0.4*pControl->d_f_measure)/pControl->mM;
 
-
+  //加速度限制超过1
+  pControl->dd_Lz = (pControl->dd_Lz > 1 ? 1 : (pControl->dd_Lz < -1 ? -1 : pControl->dd_Lz));
 
   //得到电机的加速度
   pControl->last_dd_Lz = pControl->dd_Lz;
@@ -968,14 +1089,29 @@ static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 &mVel)
 {
   int32_t iRet = 0;
   //计算收放绳子电机要执行的速度，rad/s
-  float mNowV = ((float)pTModule->mRecMsg.mMotors[0].mSpeed) * DEF_SYS_DEGREE_TO_RADIAN;
+  float mNowV = pTModule->mRecUseMsg.mSpeed[0];
   //单位为 rad/s
   mVel.v[0] = pTModule->mMagicControl.d_w*pTModule->mMagicControl.dt + mNowV;
+
+  //速度做均质滤波
+  for (int i=1; i<3;i++)
+  {
+    mVel.v[0] += pTModule->mMagicControl.magic_v[i];
+  }
+  mVel.v[0] /= 3;
+
+  //存储之前速度
+  for (int i=9; i>=0; --i)
+  {
+    pTModule->mMagicControl.magic_v[i] = pTModule->mMagicControl.magic_v[i-1];
+  }
+  pTModule->mMagicControl.magic_v[0] = mVel.v[0];
+
   //检查机械臂是否有错
   if(checkRecMsgError(pTModule) < 0)
   {
-    printf("************* mVel:%f , error:%d \n", mVel.v[0], checkRecMsgError(pTModule));
-    mVel.v[0] = 0;
+    printf("************* mVel:%f , error\n", mVel.v[0]);
+    //mVel.v[0] = 0;
   }
   //printf("************* mVel:%f > 31, error:%d d_w:%f mNowv: %f, d_w:%f, dt:%f \n", mVel.v[0], checkRecMsgError(pTModule),pTModule->mMagicControl.d_w,  mNowV,
   //                        pTModule->mMagicControl.d_w, pTModule->mMagicControl.dt);
@@ -1025,8 +1161,7 @@ void* threadEntry(void* pModule)
     //rec msg
     memset((char*)&pTModule->mRecMsg, 0 ,sizeof(pTModule->mRecMsg));
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
-    //
-    //printf("%d \n", pTModule->mRecMsg.mEncoderTurns);
+
     reformRecMsg(pTModule);
     calSysDelayed(pTModule->mReadLiftHzData, mSysSendTime, pTModule->mRecMsg.mSysTime);
     //printf("system delayed: %ds, %dus, now: \n",pTModule->mSysDelayed.mSysTimeS, pTModule->mSysDelayed.mSysTimeUs);
@@ -1069,11 +1204,13 @@ void* threadEntry(void* pModule)
           perror("this");
           break;
         }
+        /*
         LOGER::PrintfLog(BASE::S_APP_LOGER, "时间:%d %d,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d,v1:%f,v2:%f,v3:%f,v4:%f",
                                              pTModule->mRecMsg.mSysTime.mSysTimeS, pTModule->mRecMsg.mSysTime.mSysTimeUs, pTModule->mRecMsg.mRandomCode,
                                              pTModule->mRecMsg.mSwitchTiggers,pTModule->mRecMsg.mInclinometer1_x, pTModule->mRecMsg.mInclinometer1_y,
                                              pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,pTModule->mRecMsg.mEncoderTurns,pTModule->mRecMsg.mTension,
                                              pTModule->mRecMsg.mMotors[0].mSpeed, pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[3].mSpeed);
+        */
         confFire(pTModule);
         break;
       }

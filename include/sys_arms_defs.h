@@ -654,7 +654,7 @@ typedef struct
 {
   /******************初始参数***********************/
   //悬掉重物质量，控制周期、旋转臂长、转动惯量、弹簧弹性系数、绳索卷筒半径、减速机的减速比、三周期传感器角速度、三周期传感器拉力、重力加速度、阻尼系数、角速度、K1系数
-  float mM, dt, mL, mJ, mK, mR, mNdecrease, alfa_reco[3],F_reco[3],mG,mCo,mWn,mK1;
+  float mM, dt, mL, mJ, mK, mR, mNdecrease, alfa_reco[3],F_reco[3],mG,mCo,mWn,mK1,magic_v[20];
 
   /*******************随动算法数据*******************/
   //绳索末端之前位置
@@ -674,6 +674,10 @@ typedef struct
 
   //运行初始化
   int  mStep;
+
+  //编码器零位，初始时候是寻找零位置,初始重物
+  int32_t mIsEncoderZero, mIsTensionZero;
+  int32_t mEncoderZero;
 }MagicControlData;
 
 /////////////////////////////////整个系统中线程定义 //////////////////////////////////////////////

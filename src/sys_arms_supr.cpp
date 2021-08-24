@@ -312,6 +312,7 @@ static int32_t startModules(void) {
     usleep(10000);
   }
 
+  /*
   // arms threads初始化机械臂控制算法参数
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < DEF_SYS_USE_ARMS_NUMS+1; qIdx++)
   {
@@ -330,6 +331,7 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mMagicControl.alfa_reco[0] = 0;mArmsModule[qIdx-1].mMagicControl.alfa_reco[1] = 0;mArmsModule[qIdx-1].mMagicControl.alfa_reco[2] = 0;
     mArmsModule[qIdx-1].mMagicControl.F_reco[0] = 0;mArmsModule[qIdx-1].mMagicControl.F_reco[1] = 0;mArmsModule[qIdx-1].mMagicControl.F_reco[2] = 0;
   }
+  */
 
 // tension threads
   for (qIdx = 0; qIdx < CONF::ARMS_T_MAX_ID-CONF::ARMS_T_1_ID; qIdx++)

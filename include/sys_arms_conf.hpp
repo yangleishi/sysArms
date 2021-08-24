@@ -30,7 +30,7 @@ namespace CONF {
 #define DEF_SYS_USE_TENSIONLEADER_NUMS 0
 
 //编码器0点位置,千分度。25度，这个值是标定值
-#define DEF_SYS_ENCODER_ZERO 18004
+#define DEF_SYS_ENCODER_ZERO 20000
 //编码器最大转动角度
 #define DEF_SYS_ENCODER_MAX 180000
 
