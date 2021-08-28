@@ -30,6 +30,11 @@
 //电机速度 ，脉冲/s,1rpm 等于 10000/60
 #define MOTOR_V_TO_S            (166)
 
+#define MOTOR_X          (2)
+#define MOTOR_Y          (3)
+#define MOTOR_Z          (0)
+#define MOTOR_W          (1)
+
 namespace BASE {
 
 //////////////////////////////////// System internal structure  /////////////////////////////////////
@@ -69,6 +74,7 @@ typedef enum
   S_ARMS_DATA,
 } LOG_SAVA_W;
 
+
 /**************************控制算法使用结构体**************************/
 //二维位置向量,位置，速度，加速度，角度
 typedef struct
@@ -80,8 +86,8 @@ typedef struct
 //四维位置向量速度，加速度，角度
 typedef struct
 {
-  float v[4];
-} VEL_4;//单位为 rad/s
+  float v_p[4];
+} VEL_4, POS_4;//单位为 rad/s
 
 ////////////////////////////////////11 组机械臂协议中的定义   /////////////////////////////////////
 //协议中系统标识符号定义,上位机ID 控制版ID/////////////
@@ -137,6 +143,8 @@ const uint8_t   CT_MOTOR_MOVE_V_IMMEDIATELY = 0x06;
 const uint8_t   CT_MOTOR_MOVE_P_CURVE = 0x07;
 const uint8_t   CT_MOTOR_MOVE_P_TRAPEZIUM  = 0x08;
 const uint8_t   CT_MOTOR_MOVE_P_IMMEDIATELY = 0x09;
+
+const uint8_t   CT_MOTOR_MOVE_POS = 0x10;
 
 const uint8_t   CT_MOTOR_SIGNOUT = 0x09;
 
@@ -322,6 +330,18 @@ typedef struct
   uint16_t   mEncoderPulses;
 } MOTOR_REC_DATAS;
 
+//定义单个电机接收数据结构体
+typedef struct
+{
+  //rec motors datas
+  uint8_t    mMotorStateCode;
+  float    mPosition;
+  float    mSpeed;           //单位为:度/s
+  float    mAcceleration;
+  float   mEncoderTurns;
+  float   mEncoderPulses;
+} MOTOR_REC_USE_DATAS;
+
 //定义机械臂控制板接收消息
 typedef struct
 {
@@ -351,8 +371,8 @@ typedef struct
 
   //inclinometers  datas 0-7,7-15
   uint8_t    mSikosStateCode;
-  uint32_t   mSiko1;            //单位为毫米
-  uint32_t   mSiko2;
+  int32_t   mSiko1;            //单位为毫米
+  int32_t   mSiko2;
 
   //encoder  data
   uint8_t    mEncoderStateCode;
@@ -397,9 +417,13 @@ typedef struct
 
   float   mSiko1;            //单位为毫米
   float   mSiko2;
-  float    mEncoderTurns;     //单位为角度*1000。
-  //四个电机速度
-  float    mSpeed[4];           //单位为:度/s
+  float   mEncoderTurns;     //单位为角度*1000。
+  //四个电机数据,已经转换成float
+  MOTOR_REC_USE_DATAS mMotors[4];
+
+  float   mCmdSpeed[4];      //算法输入速度单位为:弧度/s
+  float   mCmdPos[4];      //算法输入速度单位为:弧度/s
+
   float    mTension;         //单位为g
 } ARMS_R_USE_MSG;
 
@@ -453,9 +477,10 @@ const uint16_t  CMD_RUN_START = CMD_BASE + 11;
 const uint16_t  CMD_RUN_STOP = CMD_BASE + 12;
 const uint16_t  CMD_RUN_STOP_E = CMD_BASE + 13;
 const uint16_t  CMD_QUIT = CMD_BASE + 14;
+const uint16_t  CMD_READ_PLAYBACK = CMD_BASE + 15;
 
 //接收到上位机控制按钮后，运行期间leader陷入条件运行状态
-const uint16_t  CMD_INTO_COND_RUN = CMD_BASE + 15;
+const uint16_t  CMD_INTO_COND_RUN = CMD_BASE + 20;
 
 //上位机循环读取显示数据命令
 const uint16_t  CMD_CYC_READ_SYS_DELAYED = CMD_BASE + 25;
@@ -487,6 +512,8 @@ const uint16_t  CMD_ACK_READ_RUNNING_DATAS = CMD_BASE + 8;
 const uint16_t  CMD_ACK_READ_SHOWDE_DATAS = CMD_BASE + 9;
 const uint16_t  CMD_ACK_READ_DELAYED_DATAS = CMD_BASE + 10;
 
+const uint16_t  CMD_ACK_READ_PLAYBACK = CMD_BASE + 11;
+
 //////////////////////CONF 模式下，interaction发送给Supr同步命令类型。便于supr分类上位机发送的按钮CMD//////////////
 const uint16_t  CMD_TYPE_BASE = 0;
 
@@ -494,7 +521,7 @@ const uint16_t  CMD_TYPE_BASE = 0;
 //下发配置数据发送的最大数据char
 #define MSG_DOWN_DATA_MAX  400
 //上传数据发送的最大数据char
-#define MSG_UP_DATA_MAX  1000
+#define MSG_UP_DATA_MAX  3000
 /////////////////////////////////////////////////rec interactions/////////////////////////////////////
 //上位机发送给app的消息
 typedef struct
@@ -531,6 +558,7 @@ typedef struct{
   float mConfSaveEncoderT;
   int   mIsValid;
 } SaveConfData;
+
 
 //配置界面中单元的重量、编码器真值设置
 typedef struct{
@@ -616,14 +644,14 @@ typedef struct{
   float   runD_RencoderT;   //翻转编码器
   float   runD_PullNow;     //拉力计当前值
   float   runD_PullSet;     //拉力计设定值
-  float   runD_RencoderXNow;     //编码器当前值
-  float   runD_RencoderXSet;     //编码器设定值
-  float   runD_RencoderYNow;     //编码器当前值
-  float   runD_RencoderYSet;     //编码器设定值
-  float   runD_RencoderZNow;     //编码器当前值
-  float   runD_RencoderZSet;     //编码器设定值
-  float   runD_RencoderWNow;     //编码器当前值
-  float   runD_RencoderWSet;     //编码器设定值
+  float   runD_VXNow;     //X电机当前值
+  float   runD_VXSet;     //电机设定值
+  float   runD_VYNow;     //电机当前值
+  float   runD_VYSet;     //电机设定值
+  float   runD_VZNow;     //电机当前值
+  float   runD_VZSet;     //电机设定值
+  float   runD_VWNow;     //电机当前值
+  float   runD_VWSet;     //电机设定值
   int     mIsValid;
 } ReadRunAllData;
 
@@ -643,9 +671,11 @@ typedef struct{
 //interaction. supr to interaction
 //supr传输给人机交互线程的数据，机械臂运行数据
 typedef struct{
-  BASE::ReadLiftSigalNowData  mReadLiftNowDatas[DEF_SYS_USE_ARMS_NUMS];
+  //BASE::ReadLiftSigalNowData  mReadLiftNowDatas[DEF_SYS_USE_ARMS_NUMS];
   BASE::ReadLiftHzData        mReadLiftHzDatas[DEF_SYS_MAX_ARMS_NUMS];
-  BASE::ReadRunAllData        mReadRunDatas[DEF_SYS_MAX_ARMS_NUMS];
+  //BASE::ReadRunAllData        mReadRunDatas[DEF_SYS_MAX_ARMS_NUMS];
+  //BASE::ReadConfData          mReadConfDatas[DEF_SYS_MAX_ARMS_NUMS];
+  BASE::ARMS_R_USE_MSG        mRecMsgsDatas[DEF_SYS_MAX_ARMS_NUMS];
   pthread_mutex_t             mArmsNowDatasMutex;
 } SuprDataToInteraction;
 
@@ -678,7 +708,19 @@ typedef struct
   //编码器零位，初始时候是寻找零位置,初始重物
   int32_t mIsEncoderZero, mIsTensionZero;
   int32_t mEncoderZero;
+
+  //执行的速度值
+  BASE::VEL_4 mCmdV;
 }MagicControlData;
+
+
+////////////////////////////////上位机控制命令数据///////////////////////////////////////////////////
+typedef struct
+{
+  //执行的速度值
+  BASE::VEL_4 mCmdV, mCmdPosXYZ, mCmdPosXYZW;
+  float   mCmdTension;
+}IntCmdData;
 
 /////////////////////////////////整个系统中线程定义 //////////////////////////////////////////////
 //线程结构体头，线程运行期间必须的参数 Each thread runs parameters
@@ -760,6 +802,7 @@ typedef struct: public THREAD_INFO_HEADER
 ////////////控制算法需要的数据////////////////////////////////
   BASE::MagicControlData mMagicControl;
 
+  BASE::IntCmdData  mIntCmd;
   //随即码
   uint16_t   mRandomCode;
 } ARMS_THREAD_INFO;

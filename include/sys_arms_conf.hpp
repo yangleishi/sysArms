@@ -26,6 +26,7 @@ namespace CONF {
 
 //最大可以使用的拉力计接收模块数量
 #define DEF_SYS_MAX_TENSIONLEADER_NUMS 2
+
 //系统中使用的拉力计接收模块数量，0时候采用有线传输（拉力计信息在有线传输协议里）
 #define DEF_SYS_USE_TENSIONLEADER_NUMS 0
 

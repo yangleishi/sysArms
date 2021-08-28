@@ -85,6 +85,7 @@ static void checkArmsWorking();
 static void handleArmsCrossing();
 static void handleInteractionCmd();
 static void changeState();
+static int32_t getIniKeyValue(char *key, char* mnName, char *filename, float* value);
 
 static int32_t deInitSupr(void);
 ////////////////////////////////////////////////////////////////////////////////
@@ -137,6 +138,45 @@ static void set_latency_target(void)
         return;
     }
     LOGER::PrintfLog(BASE::S_APP_LOGER, "# /dev/cpu_dma_latency set to %dus", latency_target_value);
+}
+
+
+static int32_t getIniKeyValue(char *key, char* mnName, char *filename, float* value)
+{
+  FILE *fp;
+
+  char readbuf[512] = {0};
+  char findbuf[100] = {0};
+  strcpy(findbuf, mnName);
+  strcat(findbuf, ".");
+  strcat(findbuf, key);
+  char *retbuf;
+  retbuf = (char *)malloc(20);
+  int line = 0;
+
+  if((fp = fopen(filename, "r")) == NULL)
+  {
+    printf("have  no  such   file \n");
+    return -1;
+  }
+  while(fgets(readbuf, sizeof(readbuf), fp)) //逐行循环读取文件，直到文件结束
+  {
+    line++;
+    if(!strncmp(readbuf, "#" ,1) || !strncmp(readbuf,"\n",1)) //忽略注释(#)和空行
+      continue;
+    if(strstr(readbuf, findbuf))     //查找配置文件名
+    {
+      char *p = strchr(readbuf, '=');  //确定“=”位置
+      do
+        p += 1;
+      while(*p == ' ');
+
+      sprintf(retbuf,"%s",p);
+      printf("*****  %s\n", retbuf);
+      *value = atof(retbuf);
+     }
+   }
+   fclose(fp);
 }
 
 /******************************************************************************
@@ -312,26 +352,22 @@ static int32_t startModules(void) {
     usleep(10000);
   }
 
-  /*
+
   // arms threads初始化机械臂控制算法参数
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < DEF_SYS_USE_ARMS_NUMS+1; qIdx++)
   {
     memset((char*)&mArmsModule[qIdx-1].mMagicControl, 0, sizeof (mArmsModule[qIdx-1].mMagicControl));
     mArmsModule[qIdx-1].mMagicControl.dt = ((float)CONF::nDelay)/1000000.0;
-    mArmsModule[qIdx-1].mMagicControl.mG = 9.8;
-    mArmsModule[qIdx-1].mMagicControl.mK = 400;
-    mArmsModule[qIdx-1].mMagicControl.mL = 0.2;
-    mArmsModule[qIdx-1].mMagicControl.mM = 15.57;
-    mArmsModule[qIdx-1].mMagicControl.mJ = 1.5*pow((mArmsModule[qIdx-1].mMagicControl.mL/2), 2.0);
-    mArmsModule[qIdx-1].mMagicControl.mR = 0.06;
-    mArmsModule[qIdx-1].mMagicControl.mCo = 0.8;
-    mArmsModule[qIdx-1].mMagicControl.mK1 = mArmsModule[qIdx-1].mMagicControl.mM* mArmsModule[qIdx-1].mMagicControl.mL + mArmsModule[qIdx-1].mMagicControl.mJ/mArmsModule[qIdx-1].mMagicControl.mL;
-    mArmsModule[qIdx-1].mMagicControl.mWn = 10;
-    mArmsModule[qIdx-1].mMagicControl.mNdecrease = 50;
-    mArmsModule[qIdx-1].mMagicControl.alfa_reco[0] = 0;mArmsModule[qIdx-1].mMagicControl.alfa_reco[1] = 0;mArmsModule[qIdx-1].mMagicControl.alfa_reco[2] = 0;
-    mArmsModule[qIdx-1].mMagicControl.F_reco[0] = 0;mArmsModule[qIdx-1].mMagicControl.F_reco[1] = 0;mArmsModule[qIdx-1].mMagicControl.F_reco[2] = 0;
+    getIniKeyValue((char*)"mG", mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&(mArmsModule[qIdx-1].mMagicControl.mG));
+    getIniKeyValue((char*)"mK",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mK);
+    getIniKeyValue((char*)"mL",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mL);
+    getIniKeyValue((char*)"mM",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mM);
+    getIniKeyValue((char*)"mWn",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mWn);
+    getIniKeyValue((char*)"mNdecrease",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mNdecrease);
+    getIniKeyValue((char*)"mR",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mR);
+    getIniKeyValue((char*)"mCo",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mCo);
   }
-  */
+
 
 // tension threads
   for (qIdx = 0; qIdx < CONF::ARMS_T_MAX_ID-CONF::ARMS_T_1_ID; qIdx++)
@@ -458,6 +494,7 @@ static void handleInteractionCmd()
             {
                 int maxNum = DEF_SYS_USE_ARMS_NUMS;
                 LOGER::PrintfLog(BASE::S_APP_LOGER, "conf, move module num:%d >= max arms num:%d", mMove->mMudoleNum, maxNum);
+                printf("conf, move module num:%d >= max arms num:%d\n", mMove->mMudoleNum, maxNum);
             }
             else
             {
@@ -593,7 +630,7 @@ static void changeState()
     case BASE::M_STATE_RUN:
     {
       //check is change to stop
-      if(mManInteraction.mIsStataChange && mManInteraction.mNewState == BASE::M_STATE_STOP)
+      if(mManInteraction.mIsStataChange && (mManInteraction.mNewState == BASE::M_STATE_STOP || mManInteraction.mNewState == BASE::M_STATE_CONF))
       {
         for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
           mArmsModule[qIdx].mState = mManInteraction.mNewState;
@@ -678,11 +715,10 @@ static int32_t suprMainLoop(){
     for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
     {
       //copy conf lift datas
-      memcpy((char*)&mSuprDataToInt.mReadLiftNowDatas[qIdx], (char*)&mArmsModule[qIdx].mReadLiftSigalNowData, sizeof(BASE::ReadLiftSigalNowData));
       //copy HZ datas
-      memcpy((char*)&mSuprDataToInt.mReadLiftHzDatas[qIdx], (char*)&mArmsModule[qIdx].mReadLiftHzData, sizeof(BASE::ReadLiftSigalNowData));
+      //memcpy((char*)&mSuprDataToInt.mReadLiftHzDatas[qIdx], (char*)&mArmsModule[qIdx].mReadLiftHzData, sizeof(BASE::ReadLiftSigalNowData));
       //copy run datas
-      memcpy((char*)&mSuprDataToInt.mReadRunDatas[qIdx], (char*)&mArmsModule[qIdx].mReadRunData, sizeof(BASE::ReadRunAllData));
+      memcpy((char*)&mSuprDataToInt.mRecMsgsDatas[qIdx], (char*)&mArmsModule[qIdx].mRecUseMsg, sizeof(BASE::ARMS_R_USE_MSG));
     }
     pthread_mutex_unlock(&mSuprDataToInt.mArmsNowDatasMutex);
 

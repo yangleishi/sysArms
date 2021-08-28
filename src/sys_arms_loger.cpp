@@ -131,7 +131,7 @@ static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule)
     return  -1;
   }
   //open data log
-  pArmsDataFile = fopen(CONF::MN_ARMS_DATA_FILE, "a+");
+  pArmsDataFile = fopen(CONF::MN_ARMS_DATA_FILE, "rw");
   if(pArmsDataFile == NULL)
   {
     return  -1;
@@ -204,12 +204,12 @@ void* threadEntry(void* pModule)
     //app running data
     while(qDelete(mArmsDataQueue, mArmsDataStr.mString))
     {
-      fprintf(pArmsDataFile,"%s\n", mArmsDataStr.mString);
+      fprintf(pArmsDataFile,"%d %s\n", mm, mArmsDataStr.mString);
       //printf("************%s\n", mLog.mString);
     }
 
     pthread_mutex_unlock(&mPrintQueueMutex);
-
+    mm++;
     fflush(pPrintFile);
     fflush(pArmsDataFile);
   }

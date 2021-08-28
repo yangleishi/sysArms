@@ -45,10 +45,10 @@ static void changeState(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmd);
 //config file
 static int readConfig(BASE::ReadConfData  * mParame);
 static int writeConfig(BASE::ReadConfData * mParame, const int mPNum);
+
+static int sendPlayBack(BASE::INTERACTION_THREAD_INFO *pTModule, int32_t mStart);
 //config handle move
 static int sendMsgToSupr(BASE::INTERACTION_THREAD_INFO *pTModule, int pNewRecType);
-
-static int sendCycDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmdCyc);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
@@ -299,59 +299,34 @@ static int sendMsgToSupr(BASE::INTERACTION_THREAD_INFO *pTModule, int pNewRecTyp
     pthread_mutex_unlock(&pTModule->mInterToSuprDatas->mInteractionRecMutex);
 }
 
-/******************************************************************************
-* 功能：  arms周期运行数据会放在supr统一管理，此函数向supr请求循环运行数据，包括整个系统配置，手动运行
-  自动运行/细节显示等的数据
-* @param pTModule : pTModule是线程信息指针，里边包含发送/接收消息，socket等信息
-* @param mCmdCyc  : mCmdCyc是循环读取周期数据cmd命令
-* @return Descriptions
-******************************************************************************/
-static int sendCycDatas(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmdCyc)
+static int sendPlayBack(BASE::INTERACTION_THREAD_INFO *pTModule, int32_t mStart)
 {
-  switch (mCmdCyc)
+  int iRet = 0;
+  FILE * pPlayBackFile = NULL;
+  if((pPlayBackFile = fopen(CONF::MN_ARMS_DATA_FILE, "r")) == NULL)
   {
-    case BASE::CMD_CYC_READ_LIFT_DATAS:
-    {
-      BASE::ReadLiftSigalNowData *mSendDatas = (BASE::ReadLiftSigalNowData *)malloc(sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
-      pthread_mutex_lock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
-      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadLiftNowDatas, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
-      pthread_mutex_unlock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
-      printf("read lift\n");
+    return  -1;
+  }
 
-      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_LIFT_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadLiftSigalNowData)*DEF_SYS_USE_ARMS_NUMS);
-      free(mSendDatas);
-      break;
-    }
-    case BASE::CMD_CYC_READ_SYS_DELAYED:
-    {
-      BASE::ReadLiftHzData *mSendDatas = (BASE::ReadLiftHzData *)malloc(sizeof(BASE::ReadLiftHzData)*DEF_SYS_MAX_ARMS_NUMS);
-      pthread_mutex_lock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
-      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadLiftHzDatas, sizeof(BASE::ReadLiftHzData)*DEF_SYS_MAX_ARMS_NUMS);
-      pthread_mutex_unlock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
+  int readIndex = 0;
+  BASE::ReadRunAllData *mSendDatas = (BASE::ReadRunAllData *)malloc(sizeof(BASE::ReadRunAllData)*DEF_SYS_MAX_ARMS_NUMS);
+  memset((char*)mSendDatas, 0, sizeof(BASE::ReadRunAllData)*DEF_SYS_MAX_ARMS_NUMS);
 
-      printf("delayed\n");
-      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_DELAYED_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadLiftHzData)*DEF_SYS_MAX_ARMS_NUMS);
-      free(mSendDatas);
-      break;
-    }
-    case BASE::CMD_CYC_READ_RUNNING_DATAS:
-    {
-      BASE::ReadRunAllData *mSendDatas = (BASE::ReadRunAllData *)malloc(sizeof(BASE::ReadRunAllData)*DEF_SYS_MAX_ARMS_NUMS);
-      pthread_mutex_lock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
-      memcpy((char*)mSendDatas, (char*)pTModule->mSuprDatasToInterasction->mReadRunDatas, sizeof(BASE::ReadRunAllData)*DEF_SYS_MAX_ARMS_NUMS);
-      pthread_mutex_unlock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
-
-      printf("run data\n");
-      sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_RUNNING_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadRunAllData)*DEF_SYS_MAX_ARMS_NUMS);
-      free(mSendDatas);
-      break;
-    }
-    default:
+  while (iRet != EOF)
+  {
+    iRet = fscanf(pPlayBackFile, "%d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n",
+            &readIndex, &(mSendDatas[0].runD_Rsiko1),&(mSendDatas[0].runD_Rsiko2),&(mSendDatas[0].runD_Level1),&(mSendDatas[0].runD_Level2),
+            &(mSendDatas[0].runD_RencoderT),&(mSendDatas[0].runD_PullNow),&(mSendDatas[0].runD_PullSet),
+            &(mSendDatas[0].runD_VXNow),&(mSendDatas[0].runD_VXSet),&(mSendDatas[0].runD_VYNow),&(mSendDatas[0].runD_VYSet),
+            &(mSendDatas[0].runD_VZNow),&(mSendDatas[0].runD_VZSet),&(mSendDatas[0].runD_VWNow),&(mSendDatas[0].runD_VWSet));
+    if(readIndex == mStart)
     {
       break;
     }
   }
-
+  sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_RUNNING_DATAS, 0, (char*)mSendDatas, sizeof(BASE::ReadRunAllData)*DEF_SYS_MAX_ARMS_NUMS);
+  free(mSendDatas);
+  fclose(pPlayBackFile);
 }
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
@@ -393,12 +368,17 @@ void* threadEntry(void* pModule)
   pTModule->mState = BASE::M_STATE_CONF;
 
   LOGER::PrintfLog(BASE::S_APP_LOGER, "interaction running!");
-
+  BASE::ARMS_R_USE_MSG *mArmsDatas = (BASE::ARMS_R_USE_MSG *)malloc(sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
   //线程陷入循环
   while(pTModule->mWorking)
   {
     //接收上位机指令，如没有指令，阻塞一定时间。
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::MArmsDownData), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
+
+    //读取每个机械臂运行数据,
+    pthread_mutex_lock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
+    memcpy((char*)mArmsDatas, (char*)pTModule->mSuprDatasToInterasction->mRecMsgsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
+    pthread_mutex_unlock(&pTModule->mSuprDatasToInterasction->mArmsNowDatasMutex);
 
     //接收上位机指令，如没有指令，阻塞一定时间。
     switch (pTModule->mRecMsg.CmdIdentify)
@@ -414,7 +394,8 @@ void* threadEntry(void* pModule)
         //TUDO  send msg to arms concl
         memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
         readConfig(mParames);
-        sendMsgToUpper(pTModule, BASE::CMD_ACK_LINK_OK, 0, (char*)mParames, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
+
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_LINK_OK, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
         break;
       }
       case BASE::CMD_UNLINK:
@@ -439,31 +420,35 @@ void* threadEntry(void* pModule)
       {
         memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
         readConfig(mParames);
+
         printf("interaction CMD read conf\n");
-        sendMsgToUpper(pTModule, BASE::CMD_ACK_READCONF_OK, 0, (char*)mParames, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_READCONF_OK, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
         break;
       }
       case BASE::CMD_HAND_MOVE_START:
       {
-        if(pTModule->mState == BASE::M_STATE_CONF)
+        if(pTModule->mState = BASE::M_STATE_CONF)
             sendMsgToSupr(pTModule, BASE::CMD_HAND_MOVE_START);
         break;
       }
       case BASE::CMD_CYC_READ_LIFT_DATAS:
       {
         if(pTModule->mState == BASE::M_STATE_CONF)
-            sendCycDatas(pTModule, BASE::CMD_CYC_READ_LIFT_DATAS);
+            sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_LIFT_DATAS, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
+
         break;
       }
       case BASE::CMD_CYC_READ_SYS_DELAYED:
       {
-        sendCycDatas(pTModule, BASE::CMD_CYC_READ_SYS_DELAYED);
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_LIFT_DATAS, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
         break;
       }
       case BASE::CMD_HAND_MOVE_STOP:
       {
         if(pTModule->mState == BASE::M_STATE_CONF)
             sendMsgToSupr(pTModule, BASE::CMD_HAND_MOVE_STOP);
+        BASE::MoveLiftSigalData *mMove = (BASE::MoveLiftSigalData *)pTModule->mRecMsg.Datas;
+        printf("%d -------------------------\n", mMove->mMudoleNum);
         break;
       }
       case BASE::CMD_ALL_MOVE_START:
@@ -520,7 +505,7 @@ void* threadEntry(void* pModule)
       }
       case BASE::CMD_CYC_READ_RUNNING_DATAS:
       {
-        sendCycDatas(pTModule, BASE::CMD_CYC_READ_RUNNING_DATAS);
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_LIFT_DATAS, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
         printf("interaction CMD run start\n");
         break;
       }
@@ -531,8 +516,15 @@ void* threadEntry(void* pModule)
       }
       case BASE::CMD_RUN_STOP:
       {
+        if(pTModule->mState == BASE::M_STATE_RUN)
+        {
+          pTModule->mNewState = BASE::M_STATE_CONF;
+          pTModule->mIsStataChange = true;
+          pTModule->mState = BASE::M_STATE_CONF;
+        }
+
         sendMsgToSupr(pTModule, BASE::CMD_RUN_STOP);
-        printf("all modules stop...\n");
+        printf("all modules trun conf state...\n");
         break;
       }
       case BASE::CMD_RUN_STOP_E:
@@ -548,6 +540,13 @@ void* threadEntry(void* pModule)
         printf("interaction CMD quit... \n");
         break;
       }
+      case BASE::CMD_READ_PLAYBACK:
+      {
+        int32_t *mTemp = (int32_t*)pTModule->mRecMsg.Datas;
+        sendPlayBack(pTModule, *mTemp);
+        printf("interaction CMD quit... \n");
+        break;
+      }
       default:
       {
         break;
@@ -558,6 +557,7 @@ void* threadEntry(void* pModule)
     memset((char*)&(pTModule->mRecMsg), 0, sizeof(BASE::MArmsDownData));
   }
 
+  free(mArmsDatas);
   moduleEndUp(pTModule);
 }
 
