@@ -488,7 +488,7 @@ static void handleInteractionCmd()
         {
           case BASE::CMD_HAND_MOVE_START : case BASE::CMD_HAND_MOVE_STOP:
           {
-            BASE::MoveLiftSigalData *mMove = (BASE::MoveLiftSigalData *)mmRecMsg.Datas;
+            BASE::LiftCmdData *mMove = (BASE::LiftCmdData *)mmRecMsg.Datas;
             //copy move to leaders
             if(mMove->mMudoleNum >=  DEF_SYS_USE_ARMS_NUMS)
             {
@@ -500,14 +500,14 @@ static void handleInteractionCmd()
             {
                 pthread_mutex_lock(&mArmsModule[mMove->mMudoleNum].mMotorMutex);
                 mArmsModule[mMove->mMudoleNum].mIsNowMotorCmd = buttonType;
-                memcpy((char*)&mArmsModule[mMove->mMudoleNum].mMoveData, mmRecMsg.Datas, sizeof(BASE::MoveLiftSigalData));
+                memcpy((char*)&mArmsModule[mMove->mMudoleNum].mMoveData, mmRecMsg.Datas, sizeof(BASE::LiftCmdData));
                 pthread_mutex_unlock(&mArmsModule[mMove->mMudoleNum].mMotorMutex);
             }
             break;
           }
           case BASE::CMD_ALL_MOVE_START:
           {
-            BASE::MoveLiftAllData *mAllMove = (BASE::MoveLiftAllData *)mmRecMsg.Datas;
+            BASE::LiftCmdData *mAllMove = (BASE::LiftCmdData *)mmRecMsg.Datas;
             //copy move to leaders
             for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
             {
@@ -515,7 +515,7 @@ static void handleInteractionCmd()
                 {
                     pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
                     mArmsModule[i].mIsNowMotorCmd = buttonType;
-                    memcpy((char*)&mArmsModule[i].mAllMoveData, (char*)&mAllMove[i], sizeof(BASE::MoveLiftAllData));
+                    memcpy((char*)&mArmsModule[i].mMoveData, (char*)&mAllMove[i], sizeof(BASE::LiftCmdData));
                     pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
                 }
             }
@@ -535,7 +535,7 @@ static void handleInteractionCmd()
           }
           case BASE::CMD_ALL_PULL_START:
           {
-            BASE::PullLiftAllData *mAllPull = (BASE::PullLiftAllData *)mmRecMsg.Datas;
+            BASE::LiftCmdData *mAllPull = (BASE::LiftCmdData *)mmRecMsg.Datas;
             //copy move to leaders
             for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
             {
@@ -543,7 +543,7 @@ static void handleInteractionCmd()
                 {
                     pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
                     mArmsModule[i].mIsNowMotorCmd = buttonType;
-                    memcpy((char*)&mArmsModule[i].mAllPullData, (char*)&mAllPull[i], sizeof(BASE::PullLiftAllData));
+                    memcpy((char*)&mArmsModule[i].mMoveData, (char*)&mAllPull[i], sizeof(BASE::LiftCmdData));
                     pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
                 }
             }

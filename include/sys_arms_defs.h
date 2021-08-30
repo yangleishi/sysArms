@@ -589,26 +589,6 @@ typedef struct{
   int   mIsValid;
 } ReadLiftHzData;
 
-//起吊界面中，上位机发送的手动控制数据命令
-typedef struct{
-  int   mMudoleNum;
-  float mHandXMove;
-  float mHandYMove;
-  float mHandZMove;
-  float mHandWMove;
-  float mMoveRelatAbs;
-} MoveLiftSigalData;
-
-//起重界面中整体控制移动,可控制多个单元X Y Z方向移动
-typedef struct{
-  int   mMudoleNum;
-  float mHandXMove;
-  float mHandYMove;
-  float mHandZMove;
-  float mHandMoveSpeed;
-  bool  mIsValid;
-} MoveLiftAllData;
-
 //起吊界面中，控制器接收arms运行数据
 typedef struct{
   int   mMudoleNum;
@@ -618,12 +598,15 @@ typedef struct{
   float mHandWMoveNow;
 } ReadLiftSigalNowData;
 
-//起重界面中整体pull移动,可控制多个单元上拉
+
+//起吊界面上位机控制数据
 typedef struct{
-  int   mMudoleNum;
-  float mHandPull;
-  int   mIsValid;
-} PullLiftAllData;
+  int    mMudoleNum;  //单元号
+  int    isVevOrPos;  //速度或者位置控制
+  float  v_p[4];      //四个电机控制数据
+  float  posCmdVel;   //位置控制的设定速度
+  int   mIsValid;     //是否有效
+} LiftCmdData;
 
 //运行界面中细节信息显示,
 typedef struct{
@@ -671,10 +654,7 @@ typedef struct{
 //interaction. supr to interaction
 //supr传输给人机交互线程的数据，机械臂运行数据
 typedef struct{
-  //BASE::ReadLiftSigalNowData  mReadLiftNowDatas[DEF_SYS_USE_ARMS_NUMS];
   BASE::ReadLiftHzData        mReadLiftHzDatas[DEF_SYS_MAX_ARMS_NUMS];
-  //BASE::ReadRunAllData        mReadRunDatas[DEF_SYS_MAX_ARMS_NUMS];
-  //BASE::ReadConfData          mReadConfDatas[DEF_SYS_MAX_ARMS_NUMS];
   BASE::ARMS_R_USE_MSG        mRecMsgsDatas[DEF_SYS_MAX_ARMS_NUMS];
   pthread_mutex_t             mArmsNowDatasMutex;
 } SuprDataToInteraction;
@@ -685,10 +665,6 @@ typedef struct
   /******************初始参数***********************/
   //悬掉重物质量，控制周期、旋转臂长、转动惯量、弹簧弹性系数、绳索卷筒半径、减速机的减速比、三周期传感器角速度、三周期传感器拉力、重力加速度、阻尼系数、角速度、K1系数
   float mM, dt, mL, mJ, mK, mR, mNdecrease, alfa_reco[3],F_reco[3],mG,mCo,mWn,mK1,magic_v[20];
-
-  /*******************随动算法数据*******************/
-  //绳索末端之前位置
-  BASE::POS_2  mRopeEndLastPos, mRopeEndLastLastPos;
 
   /*********************拉力平衡算法*********************/
   //摆角，角速度，角加速度。弧度
@@ -711,6 +687,10 @@ typedef struct
 
   //执行的速度值
   BASE::VEL_4 mCmdV;
+
+  /*******************随动算法数据*******************/
+  //绳索末端之前位置
+  BASE::POS_2  mRopeEndLastPos, mRopeEndLastLastPos;
 }MagicControlData;
 
 
@@ -781,17 +761,11 @@ typedef struct: public THREAD_INFO_HEADER
 
   //rec motor cmd
   int                mIsNowMotorCmd;
-  MoveLiftSigalData  mMoveData;
-  MoveLiftAllData    mAllMoveData;
-  PullLiftAllData    mAllPullData;
+  LiftCmdData    mMoveData;
 
+  //电机传输命令锁
   pthread_mutex_t   mMotorMutex;
 
-  //send motor data
-  //SuprDataToInteraction mNowData;
-  ReadLiftSigalNowData  mReadLiftSigalNowData;
-  ReadLiftHzData        mReadLiftHzData;
-  ReadRunAllData        mReadRunData;
 
   //无线数据传输模块，如果不使用无线模块，此值在MArmsUpData中
   TENSIONS_NOW_DATA   *mNowTension;
@@ -802,6 +776,7 @@ typedef struct: public THREAD_INFO_HEADER
 ////////////控制算法需要的数据////////////////////////////////
   BASE::MagicControlData mMagicControl;
 
+////////////上位机发送的控制命令数据////////////////////////////////
   BASE::IntCmdData  mIntCmd;
   //随即码
   uint16_t   mRandomCode;

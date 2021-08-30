@@ -426,9 +426,10 @@ void* threadEntry(void* pModule)
         break;
       }
       case BASE::CMD_HAND_MOVE_START:
+      case BASE::CMD_HAND_MOVE_STOP:
       {
         if(pTModule->mState = BASE::M_STATE_CONF)
-            sendMsgToSupr(pTModule, BASE::CMD_HAND_MOVE_START);
+            sendMsgToSupr(pTModule, pTModule->mRecMsg.CmdIdentify);
         break;
       }
       case BASE::CMD_CYC_READ_LIFT_DATAS:
@@ -441,14 +442,6 @@ void* threadEntry(void* pModule)
       case BASE::CMD_CYC_READ_SYS_DELAYED:
       {
         sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_LIFT_DATAS, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
-        break;
-      }
-      case BASE::CMD_HAND_MOVE_STOP:
-      {
-        if(pTModule->mState == BASE::M_STATE_CONF)
-            sendMsgToSupr(pTModule, BASE::CMD_HAND_MOVE_STOP);
-        BASE::MoveLiftSigalData *mMove = (BASE::MoveLiftSigalData *)pTModule->mRecMsg.Datas;
-        printf("%d -------------------------\n", mMove->mMudoleNum);
         break;
       }
       case BASE::CMD_ALL_MOVE_START:
@@ -470,11 +463,11 @@ void* threadEntry(void* pModule)
         if(pTModule->mState == BASE::M_STATE_CONF)
         {
             //tension turn kg
-            BASE::PullLiftAllData *mAllPull = (BASE::PullLiftAllData *)pTModule->mRecMsg.Datas;
+            BASE::LiftCmdData *mAllPull = (BASE::LiftCmdData *)pTModule->mRecMsg.Datas;
             for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
             {
-                if(mAllPull[i].mIsValid)
-                    mAllPull[i].mHandPull *= ((mParames[i].mConfSaveWeight)/100.0);
+                //if(mAllPull[i].mIsValid)
+                //    mAllPull[i].v_p[3] *= ((mParames[i].mConfSaveWeight)/100.0);
             }
             sendMsgToSupr(pTModule, BASE::CMD_ALL_PULL_START);
         }
