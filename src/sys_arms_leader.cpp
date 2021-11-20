@@ -145,8 +145,8 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
       return -1;
   }
 
-  setFdNonblocking(pTModule->mSocket);
-  //setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TIMEOUT_S, CONF::SERVER_UDP_TIMEOUT_US);
+  //setFdNonblocking(pTModule->mSocket);
+  setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TIMEOUT_S, CONF::SERVER_UDP_TIMEOUT_US);
 
   //my
   bzero(&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
@@ -1092,7 +1092,7 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mMagicControl.mCmdV.v_p[1] /= 5;
 
   //存储之前速度
-  for (int i=9; i>=0; --i)
+  for (int i=9; i>0; --i)
   {
     pTModule->mMagicControl.magic_Xv[i] = pTModule->mMagicControl.magic_Xv[i-1];
     pTModule->mMagicControl.magic_Yv[i] = pTModule->mMagicControl.magic_Yv[i-1];
@@ -1101,7 +1101,7 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mMagicControl.magic_Yv[0] = pTModule->mMagicControl.mCmdV.v_p[1];
 
 
-  pTModule->mMagicControl.mCmdV.v_p[0] = 0;
+  //pTModule->mMagicControl.mCmdV.v_p[0] = 0;
   return 0;
 }
 
@@ -1182,6 +1182,11 @@ void* threadEntry(void* pModule)
     memset((char*)&pTModule->mRecMsg, 0 ,sizeof(pTModule->mRecMsg));
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
 
+    //计算延迟
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    LOGER::PrintfLog(BASE::S_APP_LOGER, "send time(us) :%d,rec time(us):%d", pTModule->mSendMsg.mSysTime.mSysTimeUs,now.tv_nsec/1000);
+
     reformRecMsg(pTModule);
 
     //calSysDelayed(pTModule->mReadLiftHzData, mSysSendTime, pTModule->mRecMsg.mSysTime);
@@ -1225,6 +1230,8 @@ void* threadEntry(void* pModule)
         {
           LOGER::PrintfLog(BASE::S_APP_LOGER, "conf state: %s, size:%d client overtime or lost link. stop app", pTModule->mThreadName, size);
           //stop all modules
+
+          //**********测试期间先关闭，后期要打开
           pTModule->mState = BASE::M_STATE_QUIT;
           perror("this");
           break;

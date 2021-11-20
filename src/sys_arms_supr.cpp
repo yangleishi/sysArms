@@ -667,21 +667,16 @@ static void changeState()
 ******************************************************************************/
 static int32_t suprMainLoop(){
   //TODU
-  struct timespec now, next, interval;
+  struct timespec  next, interval;
 
   int  ret;
+  interval.tv_sec  = CONF::nDelay / USEC_PER_SEC;
+  interval.tv_nsec = (CONF::nDelay % USEC_PER_SEC) * 1000;
+  clock_gettime(CLOCK_MONOTONIC, &next);
 
   while(suprWorking)
   {
     /* Retrieve current value of CLOCK_REALTIME clock */
-    interval.tv_sec  = CONF::nDelay / USEC_PER_SEC;
-    interval.tv_nsec = (CONF::nDelay % USEC_PER_SEC) * 1000;
-    if (clock_gettime(CLOCK_MONOTONIC, &now) == -1)
-        continue;
-
-    //printf("ms:%d \n", (now.tv_nsec -  next.tv_nsec)/1000);
-
-    next = now;
     next.tv_sec  += interval.tv_sec;
     next.tv_nsec += interval.tv_nsec;
     tsnorm(&next);

@@ -22,7 +22,7 @@ namespace CONF {
 //最大可以使用的机械臂leader数量
 #define DEF_SYS_MAX_ARMS_NUMS 11
 //系统中使用的机械臂leader数量
-#define DEF_SYS_USE_ARMS_NUMS 2
+#define DEF_SYS_USE_ARMS_NUMS 1
 
 //最大可以使用的拉力计接收模块数量
 #define DEF_SYS_MAX_TENSIONLEADER_NUMS 2
@@ -44,7 +44,7 @@ namespace CONF {
 //1 rad/s 转换成电机执行的速度 10000 脉冲/s
 #define DEF_SYS_RADIAN_TO_PULSE    1591.54
 
-static const unsigned int nDelay = 10000;        /* usec */
+static const unsigned int nDelay = 100;        /* usec */
 
 
 //系统中所有线程模块ID
@@ -97,7 +97,7 @@ const char MN_SERVER_IP[][16] = {"192.168.1.100", "192.168.1.100", "192.168.1.10
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100",
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100"};
 
-const char MN_PEER_IP[][16] = {"192.168.1.99", "192.168.1.99", "192.168.1.99",
+const char MN_PEER_IP[][16] = {"192.168.1.200", "192.168.1.99", "192.168.1.99",
                                  "192.168.1.99", "192.168.1.99", "192.168.1.99",
                                  "192.168.1.99", "192.168.1.99", "192.168.1.99",
                                  "192.168.1.99", "192.168.1.99", "192.168.1.99",
@@ -127,7 +127,7 @@ const char MN_ARMS_DATA_FILE[] = "sysArms.data";
 //*********////////// UDP timeout///////////////////
 //定义模块线程UDP接收消息超时
 const int SERVER_UDP_TIMEOUT_S = 0;
-const int SERVER_UDP_TIMEOUT_US = 100;
+const int SERVER_UDP_TIMEOUT_US = 1000;
 const int SERVER_UDP_TENSION_TIMEOUT_S = 1;
 const int SERVER_UDP_TENSION_TIMEOUT_US = 0;
 const int SERVER_UDP_INTERACTION_TIMEOUT_S = 1;
