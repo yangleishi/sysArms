@@ -478,6 +478,7 @@ const uint16_t  CMD_RUN_STOP = CMD_BASE + 12;
 const uint16_t  CMD_RUN_STOP_E = CMD_BASE + 13;
 const uint16_t  CMD_QUIT = CMD_BASE + 14;
 const uint16_t  CMD_READ_PLAYBACK = CMD_BASE + 15;
+const uint16_t  CMD_READ_CYC = CMD_BASE + 16;
 
 //接收到上位机控制按钮后，运行期间leader陷入条件运行状态
 const uint16_t  CMD_INTO_COND_RUN = CMD_BASE + 20;
@@ -513,6 +514,7 @@ const uint16_t  CMD_ACK_READ_SHOWDE_DATAS = CMD_BASE + 9;
 const uint16_t  CMD_ACK_READ_DELAYED_DATAS = CMD_BASE + 10;
 
 const uint16_t  CMD_ACK_READ_PLAYBACK = CMD_BASE + 11;
+const uint16_t  CMD_ACK_READ_CYC = CMD_BASE + 12;
 
 //////////////////////CONF 模式下，interaction发送给Supr同步命令类型。便于supr分类上位机发送的按钮CMD//////////////
 const uint16_t  CMD_TYPE_BASE = 0;
@@ -557,30 +559,8 @@ typedef struct{
   float mConfSaveEncoderP;
   float mConfSaveEncoderT;
   int   mIsValid;
-} SaveConfData;
+} ConfData;
 
-
-//配置界面中单元的重量、编码器真值设置
-typedef struct{
-  float mConfSaveWeight;
-  float mConfSaveEncoderX;
-  float mConfSaveEncoderY;
-  float mConfSaveEncoderZ;
-  float mConfSaveEncoderP;
-  float mConfSaveEncoderT;
-
-  float mConfReadPull;
-  float mConfReadEncoderX;
-  float mConfReadEncoderY;
-  float mConfReadEncoderZ;
-  float mConfReadEncoderP;
-  float mConfReadEncoderT;
-  float mConfReadSikoX;
-  float mConfReadSikoY;
-  float mConfReadLevelX;
-  float mConfReadLevelY;
-  int   mIsValid;
-} ReadConfData;
 
 //起重界面中单元的频率,时间抖动读取
 typedef struct{
@@ -773,6 +753,9 @@ typedef struct: public THREAD_INFO_HEADER
   //线程在每个状态下运行条件
   BASE::M_STATE_CONDITIONS mCond;
 
+  //标定参数，初始编码器真值，重物参数
+  BASE::ConfData *mConfParam;
+
 ////////////控制算法需要的数据////////////////////////////////
   BASE::MagicControlData mMagicControl;
 
@@ -800,6 +783,8 @@ typedef struct: public THREAD_INFO_HEADER
 
   InteractionDataToSupr  *mInterToSuprDatas;
   SuprDataToInteraction  *mSuprDatasToInterasction;
+  //标定参数 所有模块的，初始编码器真值，重物参数
+  BASE::ConfData *mConfParam;
 
 }INTERACTION_THREAD_INFO;
 

@@ -26,12 +26,9 @@
 #include "sys_arms_daemon.hpp"
 
 
-static BASE::ReadConfData mParames[DEF_SYS_MAX_ARMS_NUMS] = {0};
+static BASE::ConfData mParames[DEF_SYS_MAX_ARMS_NUMS] = {0};
 
 namespace INTERACTIONER {
-
-static char printfC[100] = {0};
-pthread_mutex_t *mPrintQueueMutex = NULL;
 
 
 static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule);
@@ -42,8 +39,8 @@ static void sendMsgToUpper(BASE::INTERACTION_THREAD_INFO *pTModule, const uint16
 static void changeState(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmd);
 
 //config file
-static int readConfig(BASE::ReadConfData  * mParame);
-static int writeConfig(BASE::SaveConfData * sParame, const int mPNum);
+static int readConfig(BASE::ConfData  * mParame);
+static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum);
 
 static int sendPlayBack(BASE::INTERACTION_THREAD_INFO *pTModule, int32_t mStart);
 //config handle move
@@ -124,10 +121,10 @@ static int moduleEndUp(BASE::INTERACTION_THREAD_INFO *pTModule)
                    该配置信息可以通过上位机设置
 * @return Descriptions
 ******************************************************************************/
-static int readConfig(BASE::ReadConfData * mParame)
+static int readConfig(BASE::ConfData * mParame)
 {
   int iRet = 0;
-  BASE::ReadConfData * mTParame = mParame;
+  BASE::ConfData * mTParame = mParame;
   FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "r");
 
   if(pFile == NULL)
@@ -153,7 +150,7 @@ static int readConfig(BASE::ReadConfData * mParame)
     return 0;
   }
 
-  memset((char*)mTParame, 0, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
+  memset((char*)mTParame, 0, sizeof(BASE::ConfData)*DEF_SYS_MAX_ARMS_NUMS);
   for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
   {
 
@@ -170,7 +167,6 @@ static int readConfig(BASE::ReadConfData * mParame)
     //                             mTParame->mConfSaveEncoderZ, mTParame->mConfSaveEncoderP, mTParame->mConfSaveEncoderT);
     mTParame++;
   }
-
   fclose(pFile);
   return iRet;
 }
@@ -182,8 +178,9 @@ static int readConfig(BASE::ReadConfData * mParame)
 * @param mPNum : smPNum是保存配置信息条数，
 * @return Descriptions
 ******************************************************************************/
-static int writeConfig(BASE::SaveConfData * sParame, const int mPNum)
+static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
 {
+  BASE::ConfData *sParame = (BASE::ConfData *)pTModule->mRecMsg.Datas;
   int iRet = 0;
   FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "rw+");
 
@@ -204,6 +201,8 @@ static int writeConfig(BASE::SaveConfData * sParame, const int mPNum)
       }
   }
 
+  printf("%f \n",sParame[0].mConfSaveEncoderT);
+
   for (int i=0; i<mPNum; i++)
   {
     fprintf(pFile, "%f %f %f %f %f %f\n",
@@ -215,6 +214,20 @@ static int writeConfig(BASE::SaveConfData * sParame, const int mPNum)
                    mParames[i].mConfSaveEncoderT);
     printf("%f %f %f %f %f %f  %d\n",mParames[i].mConfSaveWeight, mParames[i].mConfSaveEncoderX, mParames[i].mConfSaveEncoderY,
                                      mParames[i].mConfSaveEncoderZ, mParames[i].mConfSaveEncoderP, mParames[i].mConfSaveEncoderT, mParames[i].mIsValid);
+  }
+
+  //拷贝给leader线程
+  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS;i++)
+  {
+      if(sParame[i].mIsValid == 1)
+      {
+          pTModule->mConfParam[i].mConfSaveWeight = sParame[i].mConfSaveWeight;
+          pTModule->mConfParam[i].mConfSaveEncoderX = sParame[i].mConfSaveEncoderX;
+          pTModule->mConfParam[i].mConfSaveEncoderY = sParame[i].mConfSaveEncoderY;
+          pTModule->mConfParam[i].mConfSaveEncoderZ = sParame[i].mConfSaveEncoderZ;
+          pTModule->mConfParam[i].mConfSaveEncoderP = sParame[i].mConfSaveEncoderP;
+          pTModule->mConfParam[i].mConfSaveEncoderT = sParame[i].mConfSaveEncoderT;
+      }
   }
 
   fclose(pFile);
@@ -346,11 +359,18 @@ void* threadEntry(void* pModule)
   //设置此线程的cpu亲和度
   BASE::hiSetCpuAffinity(pTModule->mCpuAffinity);
 
-  //log打印队列锁
-  mPrintQueueMutex = pTModule->mPrintQueueMutex;
-
   //read conf
   readConfig(mParames);
+  //拷贝给leader线程
+  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS;i++)
+  {
+    pTModule->mConfParam[i].mConfSaveWeight   = mParames[i].mConfSaveWeight;
+    pTModule->mConfParam[i].mConfSaveEncoderX = mParames[i].mConfSaveEncoderX;
+    pTModule->mConfParam[i].mConfSaveEncoderY = mParames[i].mConfSaveEncoderY;
+    pTModule->mConfParam[i].mConfSaveEncoderZ = mParames[i].mConfSaveEncoderZ;
+    pTModule->mConfParam[i].mConfSaveEncoderP = mParames[i].mConfSaveEncoderP;
+    pTModule->mConfParam[i].mConfSaveEncoderT = mParames[i].mConfSaveEncoderT;
+  }
 
   //初始化模块
   if(initServer(pTModule) != 0)
@@ -391,9 +411,8 @@ void* threadEntry(void* pModule)
 
         printf("interaction CMD link\n");
         //TUDO  send msg to arms concl
-        memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
+        memset((char*)mParames, 0, sizeof(BASE::ConfData)*DEF_SYS_MAX_ARMS_NUMS);
         readConfig(mParames);
-
         sendMsgToUpper(pTModule, BASE::CMD_ACK_LINK_OK, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
         break;
       }
@@ -411,17 +430,22 @@ void* threadEntry(void* pModule)
       case BASE::CMD_SAVE_CONF:
       {
         //BASE::SaveConfData *mSavaConf = (BASE::SaveConfData *)pTModule->mRecMsg.Datas;
-        writeConfig((BASE::SaveConfData *)pTModule->mRecMsg.Datas, DEF_SYS_MAX_ARMS_NUMS);
+        writeConfig(pTModule, DEF_SYS_MAX_ARMS_NUMS);
         printf("interaction CMD Sava conf\n");
         break;
       }
       case BASE::CMD_READ_CONF:
       {
-        memset((char*)mParames, 0, sizeof(BASE::ReadConfData)*DEF_SYS_MAX_ARMS_NUMS);
+        memset((char*)mParames, 0, sizeof(BASE::ConfData)*DEF_SYS_MAX_ARMS_NUMS);
         readConfig(mParames);
 
         printf("interaction CMD read conf\n");
-        sendMsgToUpper(pTModule, BASE::CMD_ACK_READCONF_OK, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_READCONF_OK, 0, (char*)&mParames, sizeof(BASE::ConfData)*DEF_SYS_MAX_ARMS_NUMS);
+        break;
+      }
+      case BASE::CMD_READ_CYC:
+      {
+        sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_CYC, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
         break;
       }
       case BASE::CMD_HAND_MOVE_START:
@@ -465,8 +489,8 @@ void* threadEntry(void* pModule)
             BASE::LiftCmdData *mAllPull = (BASE::LiftCmdData *)pTModule->mRecMsg.Datas;
             for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
             {
-                //if(mAllPull[i].mIsValid)
-                //    mAllPull[i].v_p[3] *= ((mParames[i].mConfSaveWeight)/100.0);
+                if(mAllPull[i].mIsValid)
+                    mAllPull[i].v_p[3] *= ((mParames[i].mConfSaveWeight)/100.0);
             }
             sendMsgToSupr(pTModule, BASE::CMD_ALL_PULL_START);
         }

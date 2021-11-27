@@ -47,6 +47,9 @@ BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_USE_ARMS_NUMS];
 BASE::TENSIONS_THREAD_INFO mArmsTension[DEF_SYS_MAX_TENSIONLEADER_NUMS];
 BASE::LOG_THREAD_INFO  mlogsModule;
 
+//上位机界面中初始标定传感器参数，一份保存在文件中，供leader使用
+BASE::ConfData     mCalibParam[DEF_SYS_USE_ARMS_NUMS];
+
 
 BASE::INTERACTION_THREAD_INFO mManInteraction;
 //interaction to supr
@@ -319,6 +322,7 @@ static int32_t startModules(void) {
   mManInteraction.mCpuAffinity  = CONF::CPU_INTERACTIONER;
   mManInteraction.mInterToSuprDatas = &mInteractionDatas;
   mManInteraction.mSuprDatasToInterasction  = &mSuprDataToInt;
+  mManInteraction.mConfParam = mCalibParam;
   gHiMInfo[CONF::ARMS_INTERACTION_ID].mPid    =  BASE::hiCreateThread(
                                                                      CONF::MN_INTERACTION_NAME,
                                                                      INTERACTIONER::threadEntry,
@@ -343,6 +347,7 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mMsgId = qIdx - 1 + BASE::ID_LEADER_FIR;
     mArmsModule[qIdx-1].mNewRecMsg = false;
     mArmsModule[qIdx-1].mNowTension  = &mTensionsData[qIdx-1];
+    mArmsModule[qIdx-1].mConfParam = &mCalibParam[qIdx-1];
     mArmsModule[qIdx-1].mCpuAffinity  = CONF::CPU_LEAD;
     mArmsModule[qIdx-1].mIsNowMotorCmd = 0;
     gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_NAME[qIdx],

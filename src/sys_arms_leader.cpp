@@ -145,8 +145,8 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
       return -1;
   }
 
-  //setFdNonblocking(pTModule->mSocket);
-  setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TIMEOUT_S, CONF::SERVER_UDP_TIMEOUT_US);
+  setFdNonblocking(pTModule->mSocket);
+  //setFdTimeout(pTModule->mSocket, CONF::SERVER_UDP_TIMEOUT_S, CONF::SERVER_UDP_TIMEOUT_US);
 
   //my
   bzero(&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
@@ -207,13 +207,14 @@ static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mS
 ******************************************************************************/
 static void calibrationSensors(BASE::ARMS_THREAD_INFO *pTModule)
 {
+  /*
   if(pTModule->mMagicControl.mIsEncoderZero == 0)
   {
     pTModule->mMagicControl.mEncoderZero = pTModule->mRecMsg.mEncoderTurns;
     pTModule->mMagicControl.mIsEncoderZero = 1;
     printf("****  %d \n", pTModule->mRecMsg.mEncoderTurns);
   }
-
+ */
   if(pTModule->mMagicControl.mIsTensionZero == 0)
   {
     pTModule->mMagicControl.mM = ((float)pTModule->mRecMsg.mTension)/1000.0;
@@ -252,10 +253,12 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   //printf("cyc read lift-------------V1:%d V2:%d V3:%d V4:%d  编码器:%d 拉力计:%f\n", pTModule->mRecMsg.mMotors[0].mSpeed, pTModule->mRecMsg.mMotors[1].mSpeed,pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[3].mSpeed,
   //                                                              pTModule->mRecMsg.mEncoderTurns, pTModule->mRecUseMsg.mTension);
 
+
   //编码器重整,
-  if(pTModule->mRecMsg.mEncoderTurns < DEF_SYS_ENCODER_MAX)
-    pTModule->mRecMsg.mEncoderTurns += 360000;
-  pTModule->mRecMsg.mEncoderTurns -= pTModule->mMagicControl.mEncoderZero;
+  if(pTModule->mRecMsg.mEncoderTurns > DEF_SYS_ENCODER_MAX)
+    pTModule->mRecMsg.mEncoderTurns -= 360000;
+  pTModule->mRecMsg.mEncoderTurns -= pTModule->mConfParam->mConfSaveEncoderT*1000.0;
+
 
 
   //数据转换成浮点型
@@ -275,6 +278,9 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
 
   //printf("%f %d, %f %d\n", pTModule->mRecUseMsg.mSiko1,pTModule->mRecMsg.mSiko1, pTModule->mRecUseMsg.mSiko2,pTModule->mRecMsg.mSiko2);
 
+  //水平仪器转换
+  pTModule->mRecUseMsg.mInclinometer1_x = pTModule->mRecMsg.mInclinometer1_x*0.001;     //单位为角度
+  pTModule->mRecUseMsg.mInclinometer1_y = pTModule->mRecMsg.mInclinometer1_y*0.001;     //单位为角度
 
   //采集三周期数据
   //存储摆动角、拉力值
@@ -466,7 +472,7 @@ static int motorMoveVXYZWCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 mVel)
       mMotors.mMotorsCmd[findMotorNum(i)].mSpeed = (int32_t)(mVel.v_p[i]*DEF_SYS_RADIAN_TO_PULSE);
     }
 
-    //printf("v:%d %d %d %d\n",mMotors.mMotorsCmd[0].mSpeed,mMotors.mMotorsCmd[1].mSpeed,mMotors.mMotorsCmd[2].mSpeed,mMotors.mMotorsCmd[3].mSpeed);
+    printf("v:%d %d %d %d\n",mMotors.mMotorsCmd[0].mSpeed,mMotors.mMotorsCmd[1].mSpeed,mMotors.mMotorsCmd[2].mSpeed,mMotors.mMotorsCmd[3].mSpeed);
     iRet = motorCmd(pTModule, mMotors);
     return  iRet;
 }
@@ -586,8 +592,8 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     {
       //位置控制,暂时没有，机械臂板子只有速度控制
       //速度控制
-      //printf("%f %f %f %f %f %f %f %f\n", pTModule->mIntCmd.mCmdV.v_p[0], pTModule->mIntCmd.mCmdV.v_p[1], pTModule->mIntCmd.mCmdV.v_p[2], pTModule->mIntCmd.mCmdV.v_p[3],
-      //                                    pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[1].mSpeed, pTModule->mRecUseMsg.mMotors[2].mSpeed, pTModule->mRecUseMsg.mMotors[3].mSpeed);
+      printf("%f %f %f %f %f %f %f %f\n", pTModule->mIntCmd.mCmdV.v_p[0], pTModule->mIntCmd.mCmdV.v_p[1], pTModule->mIntCmd.mCmdV.v_p[2], pTModule->mIntCmd.mCmdV.v_p[3],
+                                          pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[1].mSpeed, pTModule->mRecUseMsg.mMotors[2].mSpeed, pTModule->mRecUseMsg.mMotors[3].mSpeed);
       motorMoveVXYZWCmd(pTModule, pTModule->mIntCmd.mCmdV);
       break;
     }
@@ -612,7 +618,7 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     {
       //pull 命令，根据拉立计信息慢慢的增加电机转速。
       float  tensiosKg = readTensionValue(pTModule)/9.8;
-      float  cmdKg  =  pTModule->mIntCmd.mCmdTension*pTModule->mMagicControl.mM;
+      float  cmdKg  =  pTModule->mIntCmd.mCmdTension; //*pTModule->mMagicControl.mM;
       if(fabs(tensiosKg-cmdKg) > 0.05)
       {
         //TUDO 正转  倒转
@@ -810,7 +816,7 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
     }
     default:
     {
-      LOGER::PrintfLog(BASE::S_APP_LOGER,"wait cmd....  send:%d , rec:%d", pTModule->mRandomCode, pTModule->mRecMsg.mRandomCode);
+      //LOGER::PrintfLog(BASE::S_APP_LOGER,"wait cmd....  send:%d , rec:%d", pTModule->mRandomCode, pTModule->mRecMsg.mRandomCode);
       motorAllStopCmd(pTModule);
 
       /*
@@ -1183,9 +1189,11 @@ void* threadEntry(void* pModule)
     int size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
 
     //计算延迟
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    LOGER::PrintfLog(BASE::S_APP_LOGER, "send time(us) :%d,rec time(us):%d", pTModule->mSendMsg.mSysTime.mSysTimeUs,now.tv_nsec/1000);
+
+    //struct timespec now;
+    //clock_gettime(CLOCK_MONOTONIC, &now);
+    //LOGER::PrintfLog(BASE::S_APP_LOGER, "send time(us) :%d,rec time(us):%d", pTModule->mSendMsg.mSysTime.mSysTimeUs,now.tv_nsec/1000);
+
 
     reformRecMsg(pTModule);
 
@@ -1218,6 +1226,7 @@ void* threadEntry(void* pModule)
             break;
           }
         }
+        //printf("**************\n");
         initFire(pTModule);
         break;
       }
@@ -1230,19 +1239,17 @@ void* threadEntry(void* pModule)
         {
           LOGER::PrintfLog(BASE::S_APP_LOGER, "conf state: %s, size:%d client overtime or lost link. stop app", pTModule->mThreadName, size);
           //stop all modules
-
-          //**********测试期间先关闭，后期要打开
           pTModule->mState = BASE::M_STATE_QUIT;
           perror("this");
           break;
         }
-        /*
+
         LOGER::PrintfLog(BASE::S_APP_LOGER, "时间:%d %d,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d,v1:%f,v2:%f,v3:%f,v4:%f",
                                              pTModule->mRecMsg.mSysTime.mSysTimeS, pTModule->mRecMsg.mSysTime.mSysTimeUs, pTModule->mRecMsg.mRandomCode,
                                              pTModule->mRecMsg.mSwitchTiggers,pTModule->mRecMsg.mInclinometer1_x, pTModule->mRecMsg.mInclinometer1_y,
                                              pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,pTModule->mRecMsg.mEncoderTurns,pTModule->mRecMsg.mTension,
                                              pTModule->mRecMsg.mMotors[0].mSpeed, pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[3].mSpeed);
-        */
+
         confFire(pTModule);
         break;
       }
