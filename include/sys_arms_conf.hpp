@@ -46,7 +46,6 @@ namespace CONF {
 
 static const unsigned int nDelay = 10000;        /* usec */
 
-
 //系统中所有线程模块ID
 typedef enum {
   ARMS_M_SUPR_ID = 0, /*0 is special one, don't change it */
@@ -127,7 +126,7 @@ const char MN_ARMS_DATA_FILE[] = "sysArms.data";
 //*********////////// UDP timeout///////////////////
 //定义模块线程UDP接收消息超时
 const int SERVER_UDP_TIMEOUT_S = 0;
-const int SERVER_UDP_TIMEOUT_US = 8000;
+const int SERVER_UDP_TIMEOUT_US = 9500;
 const int SERVER_UDP_TENSION_TIMEOUT_S = 1;
 const int SERVER_UDP_TENSION_TIMEOUT_US = 0;
 const int SERVER_UDP_INTERACTION_TIMEOUT_S = 1;

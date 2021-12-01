@@ -362,7 +362,7 @@ static int32_t startModules(void) {
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < DEF_SYS_USE_ARMS_NUMS+1; qIdx++)
   {
     memset((char*)&mArmsModule[qIdx-1].mMagicControl, 0, sizeof (mArmsModule[qIdx-1].mMagicControl));
-    mArmsModule[qIdx-1].mMagicControl.dt = ((float)CONF::nDelay)/1000000.0;
+    mArmsModule[qIdx-1].sysDt = ((float)CONF::nDelay)/1000000.0;
     getIniKeyValue((char*)"mG", mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&(mArmsModule[qIdx-1].mMagicControl.mG));
     getIniKeyValue((char*)"mK",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mK);
     getIniKeyValue((char*)"mL",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mL);

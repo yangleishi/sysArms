@@ -36,7 +36,7 @@
 #define MOTOR_W          (1)
 
 //慈善尺滤波尺寸
-#define SIKO_AVG_S    (9)
+#define AVG_SIZE    (9)
 
 namespace BASE {
 
@@ -648,33 +648,18 @@ typedef struct
 {
   /******************初始参数***********************/
   //悬掉重物质量，控制周期、旋转臂长、转动惯量、弹簧弹性系数、绳索卷筒半径、减速机的减速比、三周期传感器角速度、三周期传感器拉力、重力加速度、阻尼系数、角速度、K1系数
-  float mM, dt, mL, mJ, mK, mR, mNdecrease, alfa_reco[3],F_reco[3],mG,mCo,mWn,mK1,magic_v[20], magic_Xv[20],magic_Yv[20];
+  float mM, mL, mJ, mK, mR, mNdecrease, alfa_reco[3],F_reco[3],mG,mCo,mWn,mK1;
 
   /*********************拉力平衡算法*********************/
-  //摆角，角速度，角加速度。弧度
-  float alfi_measure, d_alfi_measure, ddalfi_measure;
-
   //绳索释放加速度,电机释放角速度,上一个周期释放绳索加速度
-  float dd_Lz, d_w, last_dd_Lz;
-  //估算拉力值,拉力计拉力值，拉力计倒数
-  float f_estimate,f_measure,d_f_measure;
-
-  //控制电机速度,上一时刻电机速度
-  float mMagicV, mLastV;
-
-  //运行初始化
-  int  mStep;
-
-  //编码器零位，初始时候是寻找零位置,初始重物
-  int32_t mIsEncoderZero, mIsTensionZero;
-  int32_t mEncoderZero;
+  float  last_dd_Lz;
 
   //执行的速度值
   BASE::VEL_4 mCmdV;
 
   /*******************随动算法数据*******************/
   //绳索末端偏离水平位置的距离,上一周期L
-  BASE::POS_2  mRopeEndL, mRopeEndLastL;
+  BASE::POS_2  mRopeEndLastL;
 }MagicControlData;
 
 
@@ -763,9 +748,14 @@ typedef struct: public THREAD_INFO_HEADER
 ////////////控制算法需要的数据////////////////////////////////
   BASE::MagicControlData mMagicControl;
 
+  //系统控制周期
+  float sysDt;
+
   //慈善尺滤波保存数组
-  POS_2 mSikoAvg[SIKO_AVG_S+1];
-  int32_t mTensionAvg[SIKO_AVG_S+1];
+  POS_2 mSikoAvg[AVG_SIZE+1];
+  int32_t mTensionAvg[AVG_SIZE+1];
+  float magic_v[20];
+  VEL_2 magic_XYv[20];
 
 
 ////////////上位机发送的控制命令数据////////////////////////////////

@@ -64,7 +64,7 @@ static int motorAllStopCmd(BASE::ARMS_THREAD_INFO *pTModule);
 
 static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors);
 
-static BASE::ACC_2 pidGetDa(BASE::POS_2 mNowL, BASE::POS_2 mLastL, float dT);
+//static BASE::ACC_2 pidGetDa(BASE::POS_2 mNowL, BASE::POS_2 mLastL, float dT);
 static BASE::POS_2 getPosBaseAngle(BASE::ANGLE_2 mNowAngle, float ropeL);
 static BASE::ANGLE_2 getEndPosBySikoXY(float mSikoX, float mSikoY, float mRope, float mSRope);
 
@@ -207,39 +207,17 @@ static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mS
 ******************************************************************************/
 static void calibrationSensors(BASE::ARMS_THREAD_INFO *pTModule)
 {
-  /*
-  if(pTModule->mMagicControl.mIsEncoderZero == 0)
-  {
-    pTModule->mMagicControl.mEncoderZero = pTModule->mRecMsg.mEncoderTurns;
-    pTModule->mMagicControl.mIsEncoderZero = 1;
-    printf("****  %d \n", pTModule->mRecMsg.mEncoderTurns);
-  }
- */
-  if(pTModule->mMagicControl.mIsTensionZero == 0)
-  {
-    pTModule->mMagicControl.mM = readTensionValue(pTModule)/9.8;
-    pTModule->mMagicControl.mIsTensionZero = 1;
+  pTModule->mMagicControl.mM = readTensionValue(pTModule)/9.8;
 
-    //计算算法运行初始值
-    pTModule->mMagicControl.mJ = 1.5*pow((pTModule->mMagicControl.mL/2), 2.0);
-    pTModule->mMagicControl.mK1 = pTModule->mMagicControl.mM* pTModule->mMagicControl.mL + pTModule->mMagicControl.mJ/pTModule->mMagicControl.mL;
-    printf("****mM %f , mJ:%f, mK1:%f, mL:%f\n", pTModule->mMagicControl.mM, pTModule->mMagicControl.mJ,pTModule->mMagicControl.mK1,pTModule->mMagicControl.mL);
-  }
+  //计算算法运行初始值
+  pTModule->mMagicControl.mJ = 1.5*pow((pTModule->mMagicControl.mL/2), 2.0);
+  pTModule->mMagicControl.mK1 = pTModule->mMagicControl.mM* pTModule->mMagicControl.mL + pTModule->mMagicControl.mJ/pTModule->mMagicControl.mL;
+  printf("****mM %f , mJ:%f, mK1:%f, mL:%f\n", pTModule->mMagicControl.mM, pTModule->mMagicControl.mJ,pTModule->mMagicControl.mK1,pTModule->mMagicControl.mL);
 
-  //设置随动算法初始末端位置
-  //pTModule->mMagicControl.mRopeEndL.x = pTModule->mRecUseMsg.mMotors[0].mPosition;
-  //pTModule->mMagicControl.mRopeEndL.y = pTModule->mRecUseMsg.mMotors[1].mPosition;
-  memset((char*)&pTModule->mMagicControl.mRopeEndL,0, sizeof(BASE::POS_2));
-  pTModule->mMagicControl.mRopeEndLastL = pTModule->mMagicControl.mRopeEndL;
-  //memcpy((char*)&pTModule->mMagicControl.mRopeEndLastL, (char*)&pTModule->mMagicControl.mRopeEndL, sizeof(BASE::POS_2));
-
+  pTModule->mMagicControl.mRopeEndLastL = {0,0};
 
   //初始化滤波数组
-  for (int i=0; i<20; ++i)
-  {
-    pTModule->mMagicControl.magic_Xv[i] = 0;
-    pTModule->mMagicControl.magic_Yv[i] = 0;
-  }
+  memset((char*)&pTModule->magic_XYv, 0, sizeof(BASE::VEL_2)*20);
 }
 
 /******************************************************************************
@@ -259,14 +237,14 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mRecMsg.mTension /= 100;
   int32_t mTempTension = pTModule->mRecMsg.mTension;
   //拉力计滤波
-  for (int i=0; i<SIKO_AVG_S; i++)
+  for (int i=0; i<AVG_SIZE; i++)
   {
     pTModule->mTensionAvg[i] = pTModule->mTensionAvg[i+1];
     mTempTension += pTModule->mTensionAvg[i];
     //printf("mTempTens**********:%d\n",mTempTension);
   }
-  pTModule->mTensionAvg[SIKO_AVG_S] = pTModule->mRecMsg.mTension;
-  mTempTension /= (SIKO_AVG_S+1);
+  pTModule->mTensionAvg[AVG_SIZE] = pTModule->mRecMsg.mTension;
+  mTempTension /= (AVG_SIZE+1);
 
   //printf("mTempTens:%d\n",mTempTension);
   //数据转换成浮点型
@@ -285,16 +263,16 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mRecUseMsg.mSiko1       = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001;
   pTModule->mRecUseMsg.mSiko2       = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001;
   //慈善尺滤波
-  for (int i=0; i<SIKO_AVG_S; i++)
+  for (int i=0; i<AVG_SIZE; i++)
   {
     pTModule->mSikoAvg[i] = pTModule->mSikoAvg[i+1];
-    pTModule->mRecUseMsg.mSiko1 += pTModule->mSikoAvg[i+1].x;
-    pTModule->mRecUseMsg.mSiko2 += pTModule->mSikoAvg[i+1].y;
+    pTModule->mRecUseMsg.mSiko1 += pTModule->mSikoAvg[i].x;
+    pTModule->mRecUseMsg.mSiko2 += pTModule->mSikoAvg[i].y;
   }
-  pTModule->mSikoAvg[SIKO_AVG_S].x = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001;
-  pTModule->mSikoAvg[SIKO_AVG_S].y = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001;
-  pTModule->mRecUseMsg.mSiko1 /= (SIKO_AVG_S+1.0);
-  pTModule->mRecUseMsg.mSiko2 /= (SIKO_AVG_S+1.0);
+  pTModule->mSikoAvg[AVG_SIZE].x = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001;
+  pTModule->mSikoAvg[AVG_SIZE].y = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001;
+  pTModule->mRecUseMsg.mSiko1 /= (AVG_SIZE+1.0);
+  pTModule->mRecUseMsg.mSiko2 /= (AVG_SIZE+1.0);
 
 
   //printf("%f %d, %f %d\n", pTModule->mRecUseMsg.mSiko1,pTModule->mRecMsg.mSiko1, pTModule->mRecUseMsg.mSiko2,pTModule->mRecMsg.mSiko2);
@@ -350,42 +328,12 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t
   pMsg->mSysTime.mSysTimeS  = now.tv_sec;
   pMsg->mSysTime.mSysTimeUs = now.tv_nsec/1000;
 
-  //LOGER::PrintfLog(BASE::S_APP_LOGER, "send time(us) :%d", pMsg->mSysTime.mSysTimeUs);
-  //mSysSendTime.mSysTimeS = pMsg->mSysTime.mSysTimeS;
-  //mSysSendTime.mSysTimeUs = pMsg->mSysTime.mSysTimeUs;
-
   //TUDO
 
   pMsg->mCrcCode = 0;
 
   return iRet;
 }
-
-/******************************************************************************
-* 功能：机械臂控制函数，发送控制指令
-* @param pMsg : pTModule是线程信息结构体指针，里边存储的线程运行期间用到的数据和交换通信数据
-* @param mMotors : mMotors是电机控制数据，
-* @param mCtrl : mCtrl是电机控制命令，cmd
-* @param mDirection : mDirection是电机转动方向
-* @param mPosOrVel : mPosOrVel是电机位置控制，还是速度控制
-* @return Descriptions
-******************************************************************************/
-/*
-static int motorMoveAllCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors, uint8_t mCtrl)
-{
-  int32_t iRet = 0;
-  BASE::MOTORS tMotors;
-  //ctrl cmd motor
-  for(int i=0; i<4; i++)
-  {
-    mMotors.mMotorsCmd[i].mCmd = mCtrl;
-    tMotors.mMotorsCmd[findMotorNum(i)].mCmd = mMotors.mMotorsCmd[i].mCmd;
-  }
-  iRet = motorCmd(pTModule, mMotors);
-
-  return  iRet;
-}
-*/
 
 /******************************************************************************
 * 功能：机械臂控制函数，发送控制指令。只控制XYZ轴运动，没有控制拉力电机
@@ -517,7 +465,6 @@ static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors)
   iRet = sendto(pTModule->mSocket, &pTModule->mSendMsg, sizeof(BASE::ARMS_S_MSG), 0, (struct sockaddr *)&(pTModule->mPeerAddr), sizeof(pTModule->mPeerAddr));
   return  iRet;
 }
-
 
 //TUDO
 /******************************************************************************
@@ -671,11 +618,11 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     {
       static int ii = 0;
       ii++;
-      float tCmdV = 0.0;
+      memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
       if(ii<10)
       {
-          //编码器找零值
-          calibrationSensors(pTModule);
+        //编码器找零值
+        calibrationSensors(pTModule);
       }
 
       /*
@@ -687,20 +634,17 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
       LOGER::PrintfLog(BASE::S_APP_LOGER,"ixv:%f iyv:%f oxv:%f oyv:%f 兹山尺x:%f 兹山尺y:%f", pTModule->mMagicControl.mCmdV.v_p[0], pTModule->mMagicControl.mCmdV.v_p[1], pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[1].mSpeed,
                                                                   pTModule->mRecUseMsg.mSiko1,pTModule->mRecUseMsg.mSiko2);
       */
-
       //拉力控制算法
       //缓冲200个周期在启动控制算法
       if(ii > 200)
       {
           pullMagic(pTModule);//函数计算出收放收缩加速度。
           //这个函数必须在pullMagic或者followMagic函数之后调用
-          getV(pTModule, tCmdV);
+          //getV(pTModule, tCmdV);
           ii = 600;
       }
 
-      BASE::VEL_4 mCmdV = {0};
-      mCmdV.v_p[2] = tCmdV;
-      motorMoveVXYZWCmd(pTModule, mCmdV);
+      motorMoveVXYZWCmd(pTModule, pTModule->mMagicControl.mCmdV);
 
       /*
       LOGER::PrintfLog(BASE::S_ARMS_DATA, "%d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f",
@@ -823,9 +767,7 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
 
       pTModule->mIntCmd.mCmdTension = lPulldata.v_p[3];
 
-
       //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
-      //memset((char*)&mNowMotors, 0, sizeof(mNowMotors));
       setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_ALL_PULL_RUNNING, 0, 0);
       pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
       break;
@@ -839,24 +781,6 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
     {
       //LOGER::PrintfLog(BASE::S_APP_LOGER,"wait cmd....  send:%d , rec:%d", pTModule->mRandomCode, pTModule->mRecMsg.mRandomCode);
       motorAllStopCmd(pTModule);
-
-      /*
-      static int mm = 0;
-      mm++;
-
-      static float dv =0;
-
-      if(dv > 230)
-          dv = 231;
-      else
-      {
-          dv = mm * 1.5;
-      }
-
-      dv = 50;
-      motorMoveVZCmd(pTModule, dv);
-      printf("%d %f %f\n",mm, dv, pTModule->mRecUseMsg.mMotors[2].mSpeed);
-      */
       break;
     }
   }
@@ -886,9 +810,6 @@ static uint16_t copyArmsRunDatas(BASE::ARMS_R_USE_MSG mRecUseMsg, BASE::ReadRunA
   mRunDatas.runR_sysMsg_Z = mRecUseMsg.mMotors[2].mPosition;
 
   mRunDatas.runD_RencoderT = mRecUseMsg.mEncoderTurns;
-  //mRunDatas.runD_RencoderXNow = mRecMsg.mMotors[0].mEncoderTurns;
-  //mRunDatas.runD_RencoderYNow = mRecMsg.mMotors[1].mEncoderTurns;
-  //mRunDatas.runD_RencoderZNow = mRecMsg.mMotors[2].mEncoderTurns;
 }
 
 /******************************************************************************
@@ -913,23 +834,7 @@ static BASE::ANGLE_2 getEndPosBySikoXY(float mSikoX, float mSikoY, float mRope, 
     return iRet;
 }
 
-/******************************************************************************
-* 功能：随动控制PID算法
-* @param angleX : angleX是绳索X方向角度，单位弧度
-* @param angleY : angleY是绳索Y方向角度，单位弧度
-* @param ropeL : ropeL是绳索的长度单位m
-* @param dT : dT是控制周期，单位s
-* @return Descriptions
-******************************************************************************/
-static BASE::ACC_2 pidGetDa(BASE::POS_2 mNowL, BASE::POS_2 mLastL, float dT)
-{
-    BASE::ACC_2 iRet;
 
-    iRet.x = CONF::PID_P_FOLLOWUP * mNowL.x + CONF::PID_D_FOLLOWUP*(mNowL.x-mLastL.x)/dT;
-    iRet.y = CONF::PID_P_FOLLOWUP * mNowL.y + CONF::PID_D_FOLLOWUP*(mNowL.y-mLastL.y)/dT;
-
-    return iRet;
-}
 /******************************************************************************
 * 功能：机械臂在运行模式下周期调用的函数，包含系统检测，控制命令发送，运动数据拷贝等
 * @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针等
@@ -1043,11 +948,11 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
 {
   BASE::MagicControlData *pControl = &(pTModule->mMagicControl);
   //计算拉力 摆动角度导数
-  pControl->d_f_measure = (pControl->F_reco[0] - pControl->F_reco[1])/pControl->dt;
+  float d_f_measure = (pControl->F_reco[0] - pControl->F_reco[1])/pTModule->sysDt;
   //printf("f_0:%f, f_1:%f\n",pControl->F_reco[0],pControl->F_reco[1]);
 
-  pControl->d_alfi_measure = (pControl->alfa_reco[0] - pControl->alfa_reco[1])/pControl->dt;
-  pControl->ddalfi_measure = (pControl->alfa_reco[0] - 2*pControl->alfa_reco[1] + pControl->alfa_reco[2])/(pControl->dt*pControl->dt);
+  float d_alfi_measure = (pControl->alfa_reco[0] - pControl->alfa_reco[1])/pTModule->sysDt;
+  float ddalfi_measure = (pControl->alfa_reco[0] - 2*pControl->alfa_reco[1] + pControl->alfa_reco[2])/(pTModule->sysDt*pTModule->sysDt);
 
   //printf("************* ddalfi_measure:%f alfa_reco:%f %f %f\n",
   //                       pControl->ddalfi_measure, pControl->alfa_reco[0], pControl->alfa_reco[1], pControl->alfa_reco[2]);
@@ -1058,13 +963,13 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
     alfa_m = 0;
   }
   //对外力进行估算
-  pControl->f_estimate = -pControl->mK1 * pControl->ddalfi_measure - pControl->mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
+  float f_estimate = -pControl->mK1 * ddalfi_measure - pControl->mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
 
 
 
 
-  pControl->dd_Lz = (-pControl->f_estimate + 0.2*pControl->d_f_measure)/pControl->mM  +
-                    0.2*((2*pControl->mCo*pControl->mWn*pControl->d_alfi_measure+pow(pControl->mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/pControl->mM;
+  float dd_Lz = (-f_estimate + 0.2*d_f_measure)/pControl->mM  +
+                 0.2*((2*pControl->mCo*pControl->mWn*d_alfi_measure+pow(pControl->mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/pControl->mM;
 
 
   //printf("mK1:%f mM:%f last_dd_Lz:%f mK:%f  mL:%f\n",
@@ -1073,40 +978,87 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //pControl->dd_Lz = (-pControl->f_estimate + (pControl->F_reco[0]-pControl->mM*pControl->mG)*2 + 0.4*pControl->d_f_measure)/pControl->mM;
 
   //加速度限制超过1
-  if(pControl->dd_Lz > 5)
-    pControl->dd_Lz = 5;
-  if(pControl->dd_Lz < -5)
-    pControl->dd_Lz = -5;
+  if(dd_Lz > 5)
+    dd_Lz = 5;
+  if(dd_Lz < -5)
+    dd_Lz = -5;
   //pControl->dd_Lz = (pControl->dd_Lz > 2 ? 2 : (pControl->dd_Lz < -2 ? -2 : pControl->dd_Lz));
 
   //得到电机的加速度
-  pControl->last_dd_Lz = pControl->dd_Lz;
+  pControl->last_dd_Lz = dd_Lz;
   //电机的加速度
-  pControl->d_w = pControl->dd_Lz/pControl->mR * pControl->mNdecrease;
+  float d_w = dd_Lz/pControl->mR * pControl->mNdecrease;
 
   printf("dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f alfa_now:%f  d_w:%f  f_re:%f %f %f\n",
-          pControl->dd_Lz, pControl->f_estimate, pControl->d_f_measure, pControl->d_alfi_measure, alfa_m, pControl->alfa_reco[0],pControl->d_w, pControl->F_reco[0], pControl->F_reco[1],pControl->F_reco[2]);
+          dd_Lz, f_estimate, d_f_measure, d_alfi_measure, alfa_m, pControl->alfa_reco[0],d_w, pControl->F_reco[0], pControl->F_reco[1],pControl->F_reco[2]);
+
+  //根据加速度，计算要控制电机的速度
+  //计算收放绳子电机要执行的速度，rad/s
+  //单位为 rad/s
+  float mVel = d_w*pTModule->sysDt + pTModule->mRecUseMsg.mMotors[2].mSpeed;
+  float mTempVel = mVel;
+  //存储之前速度
+  for (int i=0; i<AVG_SIZE; ++i)
+  {
+    pTModule->magic_v[i] = pTModule->magic_v[i+1];
+    mTempVel += pTModule->magic_v[i];
+  }
+  pTModule->magic_v[AVG_SIZE] = mVel;
+  mTempVel /= (AVG_SIZE+1.0);
+
+  //限制速度
+  if(mTempVel > 50)
+      mTempVel = 50;
+  if(mTempVel < -50)
+      mTempVel = -50;
+
+  //检查机械臂是否有错
+  if(checkRecMsgError(pTModule) < 0)
+  {
+    printf("************* mVel:%f , error laliji\n", mTempVel);
+    //mVel.v[0] = 0;
+  }
+
+  pTModule->mMagicControl.mCmdV.v_p[2] = mTempVel;
 }
+
 static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 {
   //需要根据磁栅尺计算当前XY偏角
-  pTModule->mMagicControl.mRopeEndL = getEndPosBySikoXY(pTModule->mRecUseMsg.mSiko1, pTModule->mRecUseMsg.mSiko2, 3.0, 0.5);
+  //pTModule->mMagicControl.mRopeEndL = getEndPosBySikoXY(pTModule->mRecUseMsg.mSiko1, pTModule->mRecUseMsg.mSiko2, 3.0, 0.5);
+  BASE::POS_2  mRopeEndL;
+  mRopeEndL.x = pTModule->mRecUseMsg.mSiko1 * (3.0/0.5);
+  mRopeEndL.y = pTModule->mRecUseMsg.mSiko2 * (3.0/0.5);
   BASE::ACC_2 mAcc;
   //mAcc = pidGetDa(pTModule->mMagicControl.mRopeEndL, pTModule->mMagicControl.mRopeEndLastL, 0.01);
-  mAcc.x = CONF::PID_P_FOLLOWUP * pTModule->mMagicControl.mRopeEndL.x
-         + CONF::PID_D_FOLLOWUP*(pTModule->mMagicControl.mRopeEndL.x-pTModule->mMagicControl.mRopeEndLastL.x)/0.01;
-  mAcc.y = CONF::PID_P_FOLLOWUP * pTModule->mMagicControl.mRopeEndL.y
-         + CONF::PID_D_FOLLOWUP*(pTModule->mMagicControl.mRopeEndL.y-pTModule->mMagicControl.mRopeEndLastL.y)/0.01;
+  mAcc.x = CONF::PID_P_FOLLOWUP * mRopeEndL.x
+         + CONF::PID_D_FOLLOWUP*(mRopeEndL.x-pTModule->mMagicControl.mRopeEndLastL.x)/pTModule->sysDt;
+  mAcc.y = CONF::PID_P_FOLLOWUP * mRopeEndL.y
+         + CONF::PID_D_FOLLOWUP*(mRopeEndL.y-pTModule->mMagicControl.mRopeEndLastL.y)/pTModule->sysDt;
 
 
-  pTModule->mMagicControl.mRopeEndLastL = pTModule->mMagicControl.mRopeEndL;
+  pTModule->mMagicControl.mRopeEndLastL = mRopeEndL;
 
   BASE::ACC_2 mAngelAcc;
   mAngelAcc.x = mAcc.x/0.025 * 30;
   mAngelAcc.y = mAcc.y/0.025 * 30;
 
-  pTModule->mMagicControl.mCmdV.v_p[0] = pTModule->mRecUseMsg.mMotors[0].mSpeed + mAngelAcc.x*0.01;
-  pTModule->mMagicControl.mCmdV.v_p[1] = pTModule->mRecUseMsg.mMotors[1].mSpeed + mAngelAcc.y*0.01;
+  float Xv = pTModule->mRecUseMsg.mMotors[0].mSpeed + mAngelAcc.x*0.01;
+  float Yv = pTModule->mRecUseMsg.mMotors[1].mSpeed + mAngelAcc.y*0.01;
+  pTModule->mMagicControl.mCmdV.v_p[0] = Xv;
+  pTModule->mMagicControl.mCmdV.v_p[1] = Yv;
+  //存储之前速度
+  for (int i=0; i<AVG_SIZE; ++i)
+  {
+    pTModule->magic_XYv[i] = pTModule->magic_XYv[i+1];
+    pTModule->mMagicControl.mCmdV.v_p[0] += pTModule->magic_XYv[i].x;
+    pTModule->mMagicControl.mCmdV.v_p[1] += pTModule->magic_XYv[i].y;
+  }
+  pTModule->magic_XYv[AVG_SIZE].x = pTModule->mMagicControl.mCmdV.v_p[0];
+  pTModule->magic_XYv[AVG_SIZE].y = pTModule->mMagicControl.mCmdV.v_p[1];
+  pTModule->mMagicControl.mCmdV.v_p[0] /= (AVG_SIZE+1.0);
+  pTModule->mMagicControl.mCmdV.v_p[1] /= (AVG_SIZE+1.0);
+
 
   if(pTModule->mMagicControl.mCmdV.v_p[0] > 150)
       pTModule->mMagicControl.mCmdV.v_p[0] = 150;
@@ -1118,24 +1070,6 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   if(pTModule->mMagicControl.mCmdV.v_p[1] < -150)
       pTModule->mMagicControl.mCmdV.v_p[1] = -150;
 
-  //速度做均质滤波
-  for (int i=1; i<5;i++)
-  {
-    pTModule->mMagicControl.mCmdV.v_p[0] += pTModule->mMagicControl.magic_Xv[i];
-    pTModule->mMagicControl.mCmdV.v_p[1] += pTModule->mMagicControl.magic_Yv[i];
-  }
-  pTModule->mMagicControl.mCmdV.v_p[0] /= 5;
-  pTModule->mMagicControl.mCmdV.v_p[1] /= 5;
-
-  //存储之前速度
-  for (int i=9; i>0; --i)
-  {
-    pTModule->mMagicControl.magic_Xv[i] = pTModule->mMagicControl.magic_Xv[i-1];
-    pTModule->mMagicControl.magic_Yv[i] = pTModule->mMagicControl.magic_Yv[i-1];
-  }
-  pTModule->mMagicControl.magic_Xv[0] = pTModule->mMagicControl.mCmdV.v_p[0];
-  pTModule->mMagicControl.magic_Yv[0] = pTModule->mMagicControl.mCmdV.v_p[1];
-
 
   //pTModule->mMagicControl.mCmdV.v_p[0] = 0;
   return 0;
@@ -1144,15 +1078,16 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, float &mVel)
 {
   int32_t iRet = 0;
+  /*
   //计算收放绳子电机要执行的速度，rad/s
   float mNowV = pTModule->mRecUseMsg.mMotors[2].mSpeed;
   //单位为 rad/s
-  mVel = pTModule->mMagicControl.d_w*pTModule->mMagicControl.dt + mNowV;
+  mVel = pTModule->mMagicControl.d_w*pTModule->sysDt + mNowV;
 
   //速度做均质滤波
   for (int i=1; i<3;i++)
   {
-    mVel += pTModule->mMagicControl.magic_v[i];
+    mVel += pTModule->magic_v[i];
   }
   mVel /= 3;
 
@@ -1165,9 +1100,9 @@ static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, float &mVel)
   //存储之前速度
   for (int i=9; i>=0; --i)
   {
-    pTModule->mMagicControl.magic_v[i] = pTModule->mMagicControl.magic_v[i-1];
+    pTModule->magic_v[i] = pTModule->magic_v[i-1];
   }
-  pTModule->mMagicControl.magic_v[0] = mVel;
+  pTModule->magic_v[0] = mVel;
 
   //检查机械臂是否有错
   if(checkRecMsgError(pTModule) < 0)
@@ -1177,7 +1112,8 @@ static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, float &mVel)
   }
   //printf("************* mVel:%f > 31, error:%d d_w:%f mNowv: %f, d_w:%f, dt:%f \n", mVel.v[0], checkRecMsgError(pTModule),pTModule->mMagicControl.d_w,  mNowV,
   //                        pTModule->mMagicControl.d_w, pTModule->mMagicControl.dt);
-  return iRet;
+  */
+    return iRet;
 }
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
