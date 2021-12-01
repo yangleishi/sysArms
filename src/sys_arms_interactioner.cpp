@@ -246,9 +246,11 @@ static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
 ******************************************************************************/
 static void sendMsgToUpper(BASE::INTERACTION_THREAD_INFO *pTModule, const uint16_t StatusWord, const uint16_t StatusCode, const char* pData, int dataSize)
 {
+    static uint32_t uperRandom = 0;
     BASE::MArmsUpData mSendMsg;
     mSendMsg.StatusWord = StatusWord;
     mSendMsg.StatusCode = StatusCode;
+    mSendMsg.mRandomCode = uperRandom++;
     if(dataSize > 0 && dataSize < MSG_UP_DATA_MAX)
         memcpy(mSendMsg.Datas, pData, dataSize);
 
@@ -516,18 +518,18 @@ void* threadEntry(void* pModule)
 
         //在RUN状态下修改，Start命令发送
         sendMsgToSupr(pTModule, BASE::CMD_RUN_START);
-        printf("interaction CMD run start\n");
+        printf("interaction CMD run start1\n");
         break;
       }
       case BASE::CMD_CYC_READ_RUNNING_DATAS:
       {
         sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_LIFT_DATAS, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
-        printf("interaction CMD run start\n");
+        printf("interaction CMD run start2\n");
         break;
       }
       case BASE::CMD_CYC_READ_SHOWDE_DATAS:
       {
-        printf("interaction CMD run start\n");
+        printf("interaction CMD run start3\n");
         break;
       }
       case BASE::CMD_RUN_STOP:

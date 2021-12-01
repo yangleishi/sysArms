@@ -30,10 +30,13 @@
 //电机速度 ，脉冲/s,1rpm 等于 10000/60
 #define MOTOR_V_TO_S            (166)
 
-#define MOTOR_X          (3)
-#define MOTOR_Y          (2)
+#define MOTOR_X          (2)
+#define MOTOR_Y          (3)
 #define MOTOR_Z          (0)
 #define MOTOR_W          (1)
+
+//慈善尺滤波尺寸
+#define SIKO_AVG_S    (9)
 
 namespace BASE {
 
@@ -544,6 +547,7 @@ typedef struct
     uint16_t   StatusWord;
     //16位stateCode
     uint16_t   StatusCode;
+    uint32_t   mRandomCode;
     //数据段
     char Datas[MSG_UP_DATA_MAX];
     //序列码、随机码、保留位
@@ -758,6 +762,11 @@ typedef struct: public THREAD_INFO_HEADER
 
 ////////////控制算法需要的数据////////////////////////////////
   BASE::MagicControlData mMagicControl;
+
+  //慈善尺滤波保存数组
+  POS_2 mSikoAvg[SIKO_AVG_S+1];
+  int32_t mTensionAvg[SIKO_AVG_S+1];
+
 
 ////////////上位机发送的控制命令数据////////////////////////////////
   BASE::IntCmdData  mIntCmd;

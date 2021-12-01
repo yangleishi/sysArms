@@ -127,7 +127,7 @@ const char MN_ARMS_DATA_FILE[] = "sysArms.data";
 //*********////////// UDP timeout///////////////////
 //定义模块线程UDP接收消息超时
 const int SERVER_UDP_TIMEOUT_S = 0;
-const int SERVER_UDP_TIMEOUT_US = 5000;
+const int SERVER_UDP_TIMEOUT_US = 8000;
 const int SERVER_UDP_TENSION_TIMEOUT_S = 1;
 const int SERVER_UDP_TENSION_TIMEOUT_US = 0;
 const int SERVER_UDP_INTERACTION_TIMEOUT_S = 1;
@@ -154,10 +154,10 @@ const float  IN_OFFSET_W[DEF_SYS_USE_ARMS_NUMS] = { 0 };
 const float  IN_OFFSET_ANGLE[DEF_SYS_USE_ARMS_NUMS] = { 0 };
 
 //*********////////// 控制算法PID参数///////////////////
-const float  PID_P_FOLLOWUP = 1000.0;
-const float  PID_D_FOLLOWUP = 4000.0;
+const float  PID_P_FOLLOWUP = 200.0;
+const float  PID_D_FOLLOWUP = 800.0;
 //绳索的长度，暂时设置成固定值，等调试完毕该值是变动的
-const float  ROPE_LEN = 1.5;
+//const float  ROPE_LEN = 1.5;
 
 
 }  //namespace
