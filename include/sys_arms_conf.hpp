@@ -22,7 +22,7 @@ namespace CONF {
 //最大可以使用的机械臂leader数量
 #define DEF_SYS_MAX_ARMS_NUMS 11
 //系统中使用的机械臂leader数量
-#define DEF_SYS_USE_ARMS_NUMS 1
+#define DEF_SYS_USE_ARMS_NUMS 2
 
 //最大可以使用的拉力计接收模块数量
 #define DEF_SYS_MAX_TENSIONLEADER_NUMS 2
@@ -96,7 +96,7 @@ const char MN_SERVER_IP[][16] = {"192.168.1.100", "192.168.1.100", "192.168.1.10
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100",
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100"};
 
-const char MN_PEER_IP[][16] = {"192.168.1.99", "192.168.1.99", "192.168.1.99",
+const char MN_PEER_IP[][16] = {"192.168.1.101", "192.168.1.102", "192.168.1.99",
                                  "192.168.1.99", "192.168.1.99", "192.168.1.99",
                                  "192.168.1.99", "192.168.1.99", "192.168.1.99",
                                  "192.168.1.99", "192.168.1.99", "192.168.1.99",
@@ -113,7 +113,7 @@ const int  MN_PEER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 8889, 8889, 8889,
                                                      8889, 8889, 8889,
                                                      8889, 8889, 8889};
 
-const int  MN_TENSION_SERVER_PORT[DEF_SYS_MAX_TENSIONLEADER_NUMS] = { 9001, 9002};
+const int  MN_TENSION_SERVER_PORT[DEF_SYS_MAX_TENSIONLEADER_NUMS] = {9001, 9002};
 
 const char MN_INTERACTION_SERVER_IP[] = "192.168.1.100";
 const int  MN_INTERACTION_SERVER_PORT = 10001;
@@ -148,13 +148,11 @@ const int CPU_INTERACTIONER = 5;
 const float  IN_MAX_TENSION[DEF_SYS_USE_ARMS_NUMS] = { 100 };
 const float  IN_OFFSET_X[DEF_SYS_USE_ARMS_NUMS] = { 0 };
 const float  IN_OFFSET_Y[DEF_SYS_USE_ARMS_NUMS] = { 0 };
-const float  IN_OFFSET_Z[DEF_SYS_USE_ARMS_NUMS] = { 0 };
-const float  IN_OFFSET_W[DEF_SYS_USE_ARMS_NUMS] = { 0 };
 const float  IN_OFFSET_ANGLE[DEF_SYS_USE_ARMS_NUMS] = { 0 };
 
 //*********////////// 控制算法PID参数///////////////////
-const float  PID_P_FOLLOWUP = 200.0;
-const float  PID_D_FOLLOWUP = 800.0;
+const float  PID_P_FOLLOWUP = 10.0;
+const float  PID_D_FOLLOWUP = 30.0;
 //绳索的长度，暂时设置成固定值，等调试完毕该值是变动的
 //const float  ROPE_LEN = 1.5;
 

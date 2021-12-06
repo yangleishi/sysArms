@@ -157,7 +157,7 @@ static int32_t getIniKeyValue(char *key, char* mnName, char *filename, float* va
   retbuf = (char *)malloc(20);
   int line = 0;
 
-  if((fp = fopen(filename, "r")) == NULL)
+  if((fp = fopen(filename, "a+")) == NULL)
   {
     printf("have  no  such   file \n");
     return -1;
@@ -427,7 +427,7 @@ static void checkArmsWorking()
   {
     for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
       if(mArmsModule[qIdx].mWorking)
-          mArmsModule[qIdx].mState = BASE::M_STATE_STOP;
+          mArmsModule[qIdx].mState = BASE::M_STATE_QUIT;
     printf("this stop\n");
   }
   /*

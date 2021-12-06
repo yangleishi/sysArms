@@ -12,6 +12,8 @@ aux_source_directory(src DIR_SRCS)
 # 添加一个可编译的目标到工程
 add_executable(${PROJECT_NAME} ${DIR_SRCS})
 
+
 # use pthread
 target_link_libraries(${PROJECT_NAME} pthread)
+
 

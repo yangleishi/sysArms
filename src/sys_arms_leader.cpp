@@ -80,6 +80,7 @@ static int32_t runFire(BASE::ARMS_THREAD_INFO *pTModule);
 //算法随动、拉力算法
 static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule);
 static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule);
+static float   deadZone(float mIndead, float mthr);
 
 static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, float &mVel);
 
@@ -160,6 +161,9 @@ static int initServer(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mPeerAddr.sin_port = htons(pTModule->mPeerPort);
   pTModule->mPeerAddr.sin_addr.s_addr = inet_addr(pTModule->mPeerIpV4Str);
 
+  //运行数zhi
+  pTModule->mRCnt = 0;
+
   iRet = bind(pTModule->mSocket, (struct sockaddr*)&(pTModule->mSerAddr), sizeof(pTModule->mSerAddr));
   if(iRet < 0)
     return iRet;
@@ -217,7 +221,11 @@ static void calibrationSensors(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mMagicControl.mRopeEndLastL = {0,0};
 
   //初始化滤波数组
-  memset((char*)&pTModule->magic_XYv, 0, sizeof(BASE::VEL_2)*20);
+  for (int i=0;i<20;i++)
+  {
+      pTModule->magic_XYv[i] = {0.0,0.0};
+  }
+  //memset((char*)&pTModule->magic_XYv, 0, sizeof(BASE::VEL_2)*20);
 }
 
 /******************************************************************************
@@ -260,8 +268,8 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mRecUseMsg.mTension      = ((float)mTempTension) * 0.0098;
 
   //m单位
-  pTModule->mRecUseMsg.mSiko1       = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001;
-  pTModule->mRecUseMsg.mSiko2       = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001;
+  pTModule->mRecUseMsg.mSiko1       = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoX*0.001;
+  pTModule->mRecUseMsg.mSiko2       = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoY*0.001;
   //慈善尺滤波
   for (int i=0; i<AVG_SIZE; i++)
   {
@@ -269,8 +277,8 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
     pTModule->mRecUseMsg.mSiko1 += pTModule->mSikoAvg[i].x;
     pTModule->mRecUseMsg.mSiko2 += pTModule->mSikoAvg[i].y;
   }
-  pTModule->mSikoAvg[AVG_SIZE].x = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001;
-  pTModule->mSikoAvg[AVG_SIZE].y = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001;
+  pTModule->mSikoAvg[AVG_SIZE].x = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoX*0.001;
+  pTModule->mSikoAvg[AVG_SIZE].y = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoY*0.001;;
   pTModule->mRecUseMsg.mSiko1 /= (AVG_SIZE+1.0);
   pTModule->mRecUseMsg.mSiko2 /= (AVG_SIZE+1.0);
 
@@ -447,7 +455,8 @@ static int motorMoveVXYZWCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 mVel)
       mMotors.mMotorsCmd[findMotorNum(i)].mSpeed = (int32_t)(mVel.v_p[i]*DEF_SYS_RADIAN_TO_PULSE);
     }
 
-    //printf("v:%d %d %d %d\n",mMotors.mMotorsCmd[0].mSpeed,mMotors.mMotorsCmd[1].mSpeed,mMotors.mMotorsCmd[2].mSpeed,mMotors.mMotorsCmd[3].mSpeed);
+    //printf("V:%f %f %f %f v:%d %d %d %d\n",mVel.v_p[0], mVel.v_p[1],mVel.v_p[2],mVel.v_p[3],
+    //                                      mMotors.mMotorsCmd[0].mSpeed,mMotors.mMotorsCmd[1].mSpeed,mMotors.mMotorsCmd[2].mSpeed,mMotors.mMotorsCmd[3].mSpeed);
     iRet = motorCmd(pTModule, mMotors);
     return  iRet;
 }
@@ -564,8 +573,8 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     {
       //位置控制,暂时没有，机械臂板子只有速度控制
       //速度控制
-      //printf("%f %f %f %f %f %f %f %f\n", pTModule->mIntCmd.mCmdV.v_p[0], pTModule->mIntCmd.mCmdV.v_p[1], pTModule->mIntCmd.mCmdV.v_p[2], pTModule->mIntCmd.mCmdV.v_p[3],
-      //                                    pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[1].mSpeed, pTModule->mRecUseMsg.mMotors[2].mSpeed, pTModule->mRecUseMsg.mMotors[3].mSpeed);
+      printf("%f %f %f %f %f %f %f %f\n", pTModule->mIntCmd.mCmdV.v_p[0], pTModule->mIntCmd.mCmdV.v_p[1], pTModule->mIntCmd.mCmdV.v_p[2], pTModule->mIntCmd.mCmdV.v_p[3],
+                                          pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[1].mSpeed, pTModule->mRecUseMsg.mMotors[2].mSpeed, pTModule->mRecUseMsg.mMotors[3].mSpeed);
       motorMoveVXYZWCmd(pTModule, pTModule->mIntCmd.mCmdV);
       break;
     }
@@ -610,7 +619,7 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     case BASE::ST_LIFT_STOPED:
     {
       motorAllStopCmd(pTModule);
-      printf("lift stop cmd....\n");
+      //printf("lift stop cmd....\n");
       break;
     }
     //run mode
@@ -618,33 +627,44 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     {
       static int ii = 0;
       ii++;
-      memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
+      //memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
       if(ii<10)
       {
         //编码器找零值
         calibrationSensors(pTModule);
       }
 
-      /*
-      //TUDO PID ctrl move to (x y z)
-      followagic(pTModule);
-      //平面XY随动控制
-      motorMoveVXYCmd(pTModule, pTModule->mMagicControl.mCmdV);
 
-      LOGER::PrintfLog(BASE::S_APP_LOGER,"ixv:%f iyv:%f oxv:%f oyv:%f 兹山尺x:%f 兹山尺y:%f", pTModule->mMagicControl.mCmdV.v_p[0], pTModule->mMagicControl.mCmdV.v_p[1], pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[1].mSpeed,
-                                                                  pTModule->mRecUseMsg.mSiko1,pTModule->mRecUseMsg.mSiko2);
-      */
+      //TUDO PID ctrl move to (x y z)
+
       //拉力控制算法
       //缓冲200个周期在启动控制算法
+
       if(ii > 200)
       {
-          pullMagic(pTModule);//函数计算出收放收缩加速度。
-          //这个函数必须在pullMagic或者followMagic函数之后调用
-          //getV(pTModule, tCmdV);
-          ii = 600;
+
+        followagic(pTModule);
+        //pTModule->mMagicControl.mCmdV.v_p[0] = 0;
+        //pTModule->mMagicControl.mCmdV.v_p[1] = 0;
+        //pTModule->mMagicControl.mCmdV.v_p[2] = 0;
+
+        pullMagic(pTModule);//函数计算出收放收缩加速度。
+        ii = 600;
+      }else
+      {
+        memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
       }
 
-      motorMoveVXYZWCmd(pTModule, pTModule->mMagicControl.mCmdV);
+      //pTModule->mMagicControl.mCmdV.v_p[2] = 0;
+      if((pTModule->mRCnt%8) == 0)
+      LOGER::PrintfLog(BASE::S_APP_LOGER,"name:%s,ixv:%f iyv:%f izV:%f oxv:%f oyv:%f ozV:%f 兹山尺x:%f 兹山尺y:%f",
+                       pTModule->mThreadName, pTModule->mMagicControl.mCmdV.v_p[0],  pTModule->mMagicControl.mCmdV.v_p[1],pTModule->mMagicControl.mCmdV.v_p[2],
+                       pTModule->mRecUseMsg.mMotors[0].mSpeed,pTModule->mRecUseMsg.mMotors[1].mSpeed,pTModule->mRecUseMsg.mMotors[2].mSpeed,
+                       pTModule->mRecUseMsg.mSiko1,pTModule->mRecUseMsg.mSiko2);
+
+      BASE::VEL_4 mCmdV = pTModule->mMagicControl.mCmdV;
+
+      motorMoveVXYZWCmd(pTModule, mCmdV);
 
       /*
       LOGER::PrintfLog(BASE::S_ARMS_DATA, "%d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f",
@@ -659,7 +679,8 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     case BASE::ST_RUN_STOPED:
     {
       motorAllStopCmd(pTModule);
-      printf("run stop cmd....  send:%d , rec:%d\n", pTModule->mRandomCode, pTModule->mRecMsg.mRandomCode);
+      if((pTModule->mRCnt%100) == 0)
+        printf("run stop cmd....  send:%d , rec:%d\n", pTModule->mRandomCode, pTModule->mRecMsg.mRandomCode);
       //run模式停止的话自动退回conf模式
 
       break;
@@ -958,10 +979,10 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //                       pControl->ddalfi_measure, pControl->alfa_reco[0], pControl->alfa_reco[1], pControl->alfa_reco[2]);
 
   float alfa_m = pControl->alfa_reco[0];
-  if(fabs(alfa_m) < 1.5/60)
-  {
-    alfa_m = 0;
-  }
+  //if(fabs(alfa_m) < 1.5/60)
+  //{
+  //  alfa_m = 0;
+  //}
   //对外力进行估算
   float f_estimate = -pControl->mK1 * ddalfi_measure - pControl->mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
 
@@ -978,10 +999,10 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //pControl->dd_Lz = (-pControl->f_estimate + (pControl->F_reco[0]-pControl->mM*pControl->mG)*2 + 0.4*pControl->d_f_measure)/pControl->mM;
 
   //加速度限制超过1
-  if(dd_Lz > 5)
-    dd_Lz = 5;
-  if(dd_Lz < -5)
-    dd_Lz = -5;
+  if(dd_Lz > 3)
+    dd_Lz = 3;
+  if(dd_Lz < -3)
+    dd_Lz = -3;
   //pControl->dd_Lz = (pControl->dd_Lz > 2 ? 2 : (pControl->dd_Lz < -2 ? -2 : pControl->dd_Lz));
 
   //得到电机的加速度
@@ -989,7 +1010,8 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //电机的加速度
   float d_w = dd_Lz/pControl->mR * pControl->mNdecrease;
 
-  printf("dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f alfa_now:%f  d_w:%f  f_re:%f %f %f\n",
+  if((pTModule->mRCnt%8) == 0)
+  printf("%s,dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f alfa_now:%f  d_w:%f  f_re:%f %f %f\n",pTModule->mThreadName,
           dd_Lz, f_estimate, d_f_measure, d_alfi_measure, alfa_m, pControl->alfa_reco[0],d_w, pControl->F_reco[0], pControl->F_reco[1],pControl->F_reco[2]);
 
   //根据加速度，计算要控制电机的速度
@@ -1007,10 +1029,10 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   mTempVel /= (AVG_SIZE+1.0);
 
   //限制速度
-  if(mTempVel > 50)
-      mTempVel = 50;
-  if(mTempVel < -50)
-      mTempVel = -50;
+  if(mTempVel > 80)
+      mTempVel = 80;
+  if(mTempVel < -80)
+      mTempVel = -80;
 
   //检查机械臂是否有错
   if(checkRecMsgError(pTModule) < 0)
@@ -1022,13 +1044,35 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mMagicControl.mCmdV.v_p[2] = mTempVel;
 }
 
+static float deadZone(float mIndead, float mthr)
+{
+  float iRet = mIndead;
+  if(fabs(iRet) <= fabs(mthr))
+  {
+    iRet = 0;
+  }
+  else if(iRet > fabs(mthr))
+  {
+    iRet -= fabs(mthr);
+  }
+  else if(iRet < -fabs(mthr))
+  {
+    iRet += fabs(mthr);
+  }
+  return iRet;
+}
+
 static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 {
   //需要根据磁栅尺计算当前XY偏角
   //pTModule->mMagicControl.mRopeEndL = getEndPosBySikoXY(pTModule->mRecUseMsg.mSiko1, pTModule->mRecUseMsg.mSiko2, 3.0, 0.5);
   BASE::POS_2  mRopeEndL;
-  mRopeEndL.x = pTModule->mRecUseMsg.mSiko1 * (3.0/0.5);
-  mRopeEndL.y = pTModule->mRecUseMsg.mSiko2 * (3.0/0.5);
+  //mRopeEndL.x = pTModule->mRecUseMsg.mSiko1 * (3.0/0.5);
+  //mRopeEndL.y = pTModule->mRecUseMsg.mSiko2 * (3.0/0.5);
+  //x y轴设置死区间
+  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1 * (3.0/0.5), 0.004);
+  mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2 * (3.0/0.5), 0.004);
+
   BASE::ACC_2 mAcc;
   //mAcc = pidGetDa(pTModule->mMagicControl.mRopeEndL, pTModule->mMagicControl.mRopeEndLastL, 0.01);
   mAcc.x = CONF::PID_P_FOLLOWUP * mRopeEndL.x
@@ -1045,31 +1089,34 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 
   float Xv = pTModule->mRecUseMsg.mMotors[0].mSpeed + mAngelAcc.x*0.01;
   float Yv = pTModule->mRecUseMsg.mMotors[1].mSpeed + mAngelAcc.y*0.01;
+
   pTModule->mMagicControl.mCmdV.v_p[0] = Xv;
   pTModule->mMagicControl.mCmdV.v_p[1] = Yv;
+
   //存储之前速度
-  for (int i=0; i<AVG_SIZE; ++i)
+  for (int i=0; i<XYV_AVG_SIZE; ++i)
   {
     pTModule->magic_XYv[i] = pTModule->magic_XYv[i+1];
     pTModule->mMagicControl.mCmdV.v_p[0] += pTModule->magic_XYv[i].x;
     pTModule->mMagicControl.mCmdV.v_p[1] += pTModule->magic_XYv[i].y;
   }
-  pTModule->magic_XYv[AVG_SIZE].x = pTModule->mMagicControl.mCmdV.v_p[0];
-  pTModule->magic_XYv[AVG_SIZE].y = pTModule->mMagicControl.mCmdV.v_p[1];
-  pTModule->mMagicControl.mCmdV.v_p[0] /= (AVG_SIZE+1.0);
-  pTModule->mMagicControl.mCmdV.v_p[1] /= (AVG_SIZE+1.0);
+
+  pTModule->magic_XYv[XYV_AVG_SIZE].x = Xv;
+  pTModule->magic_XYv[XYV_AVG_SIZE].y = Yv;
+  pTModule->mMagicControl.mCmdV.v_p[0] /= (XYV_AVG_SIZE+1.0);
+  pTModule->mMagicControl.mCmdV.v_p[1] /= (XYV_AVG_SIZE+1.0);
 
 
-  if(pTModule->mMagicControl.mCmdV.v_p[0] > 150)
-      pTModule->mMagicControl.mCmdV.v_p[0] = 150;
-  if(pTModule->mMagicControl.mCmdV.v_p[0] < -150)
-      pTModule->mMagicControl.mCmdV.v_p[0] = -150;
+  //限速
+  if(pTModule->mMagicControl.mCmdV.v_p[0] > 100)
+      pTModule->mMagicControl.mCmdV.v_p[0] = 100;
+  if(pTModule->mMagicControl.mCmdV.v_p[0] < -100)
+      pTModule->mMagicControl.mCmdV.v_p[0] = -100;
 
-  if(pTModule->mMagicControl.mCmdV.v_p[1] > 150)
-      pTModule->mMagicControl.mCmdV.v_p[1] = 150;
-  if(pTModule->mMagicControl.mCmdV.v_p[1] < -150)
-      pTModule->mMagicControl.mCmdV.v_p[1] = -150;
-
+  if(pTModule->mMagicControl.mCmdV.v_p[1] > 100)
+      pTModule->mMagicControl.mCmdV.v_p[1] = 100;
+  if(pTModule->mMagicControl.mCmdV.v_p[1] < -100)
+      pTModule->mMagicControl.mCmdV.v_p[1] = -100;
 
   //pTModule->mMagicControl.mCmdV.v_p[0] = 0;
   return 0;
@@ -1144,6 +1191,7 @@ void* threadEntry(void* pModule)
   }
 
   int size = 0;
+  char printfError[100];
 
   LOGER::PrintfLog(BASE::S_APP_LOGER, "%s leader running!", pTModule->mThreadName);
   //running state
@@ -1154,15 +1202,22 @@ void* threadEntry(void* pModule)
     pthread_cond_wait(&pTModule->mArmsMsgReady, &pTModule->mArmsMsgMutex);
     pthread_mutex_unlock(&pTModule->mArmsMsgMutex);
 
+    pTModule->mRCnt++;
+    //struct timespec now;
+    //clock_gettime(CLOCK_MONOTONIC, &now);
+    //LOGER::PrintfLog(BASE::S_APP_LOGER, "lock time(s) :%d,lock time(us):%d", now.tv_sec, now.tv_nsec/1000);
+
     //rec msg
     memset((char*)&pTModule->mRecMsg, 0 ,sizeof(pTModule->mRecMsg));
     size = recvfrom(pTModule->mSocket , (char*)&(pTModule->mRecMsg), sizeof(BASE::ARMS_R_MSG), 0, (sockaddr*)&(pTModule->mPeerAddr), &mun);
 
     if(size != sizeof(BASE::ARMS_R_MSG))
     {
-      //超时,
+      sprintf(printfError,"no client link, or size < rec msg\n");
       LOGER::PrintfLog(BASE::S_APP_LOGER, "state: %s, no client link, or size < rec msg", pTModule->mThreadName);
-      pTModule->mState = BASE::M_STATE_STOP;
+      //只有在conf 或者 run 模式下超时才转换到stop模式
+      if((pTModule->mState == BASE::M_STATE_CONF) || (pTModule->mState == BASE::M_STATE_RUN))
+        pTModule->mState = BASE::M_STATE_STOP;
     }else
     {
         reformRecMsg(pTModule);
@@ -1195,8 +1250,9 @@ void* threadEntry(void* pModule)
       case BASE::M_STATE_CONF:
       {
 
-        LOGER::PrintfLog(BASE::S_APP_LOGER, "时间:%d %d,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d,v1:%f,v2:%f,v3:%f,v4:%f",
-                                             pTModule->mRecMsg.mSysTime.mSysTimeS, pTModule->mRecMsg.mSysTime.mSysTimeUs, pTModule->mRecMsg.mRandomCode,
+        if((pTModule->mRCnt%8) == 0)
+            LOGER::PrintfLog(BASE::S_APP_LOGER, "模块：%s,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d,v1:%f,v2:%f,v3:%f,v4:%f",
+                                             pTModule->mThreadName,  pTModule->mRecMsg.mRandomCode,
                                              pTModule->mRecMsg.mSwitchTiggers,pTModule->mRecMsg.mInclinometer1_x, pTModule->mRecMsg.mInclinometer1_y,
                                              pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,pTModule->mRecMsg.mEncoderTurns,pTModule->mRecMsg.mTension,
                                              pTModule->mRecMsg.mMotors[0].mSpeed, pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[3].mSpeed);
@@ -1221,7 +1277,7 @@ void* threadEntry(void* pModule)
       case BASE::M_STATE_STOP:
       {
         motorAllStopCmd(pTModule);
-        printf("motor stoped state...\n");
+        printf(printfError);
         break;
       }
       case BASE::M_STATE_QUIT:

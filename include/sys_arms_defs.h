@@ -38,6 +38,8 @@
 //慈善尺滤波尺寸
 #define AVG_SIZE    (9)
 
+#define XYV_AVG_SIZE    (3)
+
 namespace BASE {
 
 //////////////////////////////////// System internal structure  /////////////////////////////////////
@@ -557,10 +559,9 @@ typedef struct
 //配置界面中单元的重量、编码器真值设置
 typedef struct{
   float mConfSaveWeight;
-  float mConfSaveEncoderX;
-  float mConfSaveEncoderY;
-  float mConfSaveEncoderZ;
-  float mConfSaveEncoderP;
+  float mConfSaveSikoX;
+  float mConfSaveSikoY;
+
   float mConfSaveEncoderT;
   int   mIsValid;
 } ConfData;
@@ -647,7 +648,7 @@ typedef struct{
 typedef struct
 {
   /******************初始参数***********************/
-  //悬掉重物质量，控制周期、旋转臂长、转动惯量、弹簧弹性系数、绳索卷筒半径、减速机的减速比、三周期传感器角速度、三周期传感器拉力、重力加速度、阻尼系数、角速度、K1系数
+  //悬掉重物质量，旋转臂长、转动惯量、弹簧弹性系数、绳索卷筒半径、减速机的减速比、三周期传感器角速度、三周期传感器拉力、重力加速度、阻尼系数、角速度、K1系数
   float mM, mL, mJ, mK, mR, mNdecrease, alfa_reco[3],F_reco[3],mG,mCo,mWn,mK1;
 
   /*********************拉力平衡算法*********************/
@@ -695,6 +696,10 @@ typedef struct
 
   //标识当前leader的ID
   uint16_t     mMsgId;
+
+  //运行周期
+  uint32_t     mRCnt;
+
 } THREAD_INFO_HEADER;
 
 //日志线程结构体信息loger thread info

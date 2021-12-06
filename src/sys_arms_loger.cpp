@@ -131,7 +131,7 @@ static int32_t initLoger(BASE::LOG_THREAD_INFO *pTModule)
     return  -1;
   }
   //open data log
-  pArmsDataFile = fopen(CONF::MN_ARMS_DATA_FILE, "rw");
+  pArmsDataFile = fopen(CONF::MN_ARMS_DATA_FILE, "a+");
   if(pArmsDataFile == NULL)
   {
     return  -1;
