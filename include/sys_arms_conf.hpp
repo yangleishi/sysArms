@@ -20,9 +20,9 @@ server client的IP和port
 namespace CONF {
 
 //最大可以使用的机械臂leader数量
-#define DEF_SYS_MAX_ARMS_NUMS 11
+#define DEF_SYS_MAX_ARMS_NUMS 8
 //系统中使用的机械臂leader数量
-#define DEF_SYS_USE_ARMS_NUMS 2
+#define DEF_SYS_USE_ARMS_NUMS 3
 
 //最大可以使用的拉力计接收模块数量
 #define DEF_SYS_MAX_TENSIONLEADER_NUMS 2
@@ -57,19 +57,16 @@ typedef enum {
   ARMS_M_6_ID,
   ARMS_M_7_ID,
   ARMS_M_8_ID,
-  ARMS_M_9_ID,
-  ARMS_M_10_ID,
-  ARMS_M_11_ID,
   ARMS_M_MAX_ID,
 
-  ARMS_T_1_ID = 12,
+  ARMS_T_1_ID = 9,
   ARMS_T_2_ID,
   ARMS_T_MAX_ID = ARMS_M_MAX_ID  + DEF_SYS_USE_TENSIONLEADER_NUMS,
 
-  ARMS_INTERACTION_ID = 14,
+  ARMS_INTERACTION_ID = 11,
   ARMS_INTERACTION_MAX_ID,
 
-  ARMS_LOG_1_ID = 15,
+  ARMS_LOG_1_ID = 12,
   ARMS_LOG_MAX_ID,
 } MODULE_NAME_ID;
 
@@ -96,7 +93,7 @@ const char MN_SERVER_IP[][16] = {"192.168.1.100", "192.168.1.100", "192.168.1.10
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100",
                                  "192.168.1.100", "192.168.1.100", "192.168.1.100"};
 
-const char MN_PEER_IP[][16] = {"192.168.1.101", "192.168.1.102", "192.168.1.99",
+const char MN_PEER_IP[][16] = {"192.168.1.101", "192.168.1.102", "192.168.1.103",
                                  "192.168.1.99", "192.168.1.99", "192.168.1.99",
                                  "192.168.1.99", "192.168.1.99", "192.168.1.99",
                                  "192.168.1.99", "192.168.1.99", "192.168.1.99",
@@ -106,12 +103,10 @@ const char MN_TENSION_SERVER_IP[][16] = {"192.168.1.100", "192.168.1.100"};
 
 const int  MN_SERVER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 8001, 8002, 8003,
                                                      8004, 8005, 8006,
-                                                     8007, 8008, 8009,
-                                                     8010, 8011, 8012};
+                                                     8007, 8008};
 const int  MN_PEER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 8889, 8889, 8889,
                                                      8889, 8889, 8889,
-                                                     8889, 8889, 8889,
-                                                     8889, 8889, 8889};
+                                                     8889, 8889};
 
 const int  MN_TENSION_SERVER_PORT[DEF_SYS_MAX_TENSIONLEADER_NUMS] = {9001, 9002};
 

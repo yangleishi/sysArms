@@ -604,9 +604,9 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
       {
         //TUDO 正转  倒转
         if(tensiosKg > cmdKg)
-            motorMoveVWCmd(pTModule, 0.01);
+            motorMoveVWCmd(pTModule, 1);
         else
-            motorMoveVWCmd(pTModule, -0.01);
+            motorMoveVWCmd(pTModule, -1);
          printf("conf motor all pull move:set tension %f, now tension:%f, state:%d\n",  pTModule->mIntCmd.mCmdTension, tensiosKg, pTModule->mIsNowMotorCmd);
       }
       else
