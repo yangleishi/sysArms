@@ -211,12 +211,12 @@ static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mS
 ******************************************************************************/
 static void calibrationSensors(BASE::ARMS_THREAD_INFO *pTModule)
 {
-  pTModule->mMagicControl.mM = readTensionValue(pTModule)/9.8;
+  //pTModule->mMagicControl.mM = readTensionValue(pTModule)/9.8;
 
   //计算算法运行初始值
   pTModule->mMagicControl.mJ = 1.5*pow((pTModule->mMagicControl.mL/2), 2.0);
-  pTModule->mMagicControl.mK1 = pTModule->mMagicControl.mM* pTModule->mMagicControl.mL + pTModule->mMagicControl.mJ/pTModule->mMagicControl.mL;
-  printf("****mM %f , mJ:%f, mK1:%f, mL:%f\n", pTModule->mMagicControl.mM, pTModule->mMagicControl.mJ,pTModule->mMagicControl.mK1,pTModule->mMagicControl.mL);
+  pTModule->mMagicControl.mK1 = pTModule->mConfParam->mConfSaveWeight * pTModule->mMagicControl.mL + pTModule->mMagicControl.mJ/pTModule->mMagicControl.mL;
+  printf("****mM %f , mJ:%f, mK1:%f, mL:%f\n", pTModule->mConfParam->mConfSaveWeight, pTModule->mMagicControl.mJ,pTModule->mMagicControl.mK1,pTModule->mMagicControl.mL);
 
   pTModule->mMagicControl.mRopeEndLastL = {0,0};
 
@@ -569,30 +569,13 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
   //接收命令后执行命令中
   switch (pTModule->mCond.mMotorCmd)
   {
-    case BASE::ST_HAND_MOVE_RUNNING:
+    case BASE::ST_ALL_MOVE_RUNNING:
     {
       //位置控制,暂时没有，机械臂板子只有速度控制
       //速度控制
       printf("%f %f %f %f %f %f %f %f\n", pTModule->mIntCmd.mCmdV.v_p[0], pTModule->mIntCmd.mCmdV.v_p[1], pTModule->mIntCmd.mCmdV.v_p[2], pTModule->mIntCmd.mCmdV.v_p[3],
                                           pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[1].mSpeed, pTModule->mRecUseMsg.mMotors[2].mSpeed, pTModule->mRecUseMsg.mMotors[3].mSpeed);
       motorMoveVXYZWCmd(pTModule, pTModule->mIntCmd.mCmdV);
-      break;
-    }
-    case BASE::ST_ALL_MOVE_RUNNING:
-    {
-      if(fabs(pTModule->mRecUseMsg.mMotors[0].mPosition-pTModule->mIntCmd.mCmdPosXYZ.v_p[0]) > 0.001 &&
-         fabs(pTModule->mRecUseMsg.mMotors[1].mPosition-pTModule->mIntCmd.mCmdPosXYZ.v_p[1]) > 0.001 &&
-         fabs(pTModule->mRecUseMsg.mMotors[2].mPosition-pTModule->mIntCmd.mCmdPosXYZ.v_p[2]) > 0.001)
-      {
-          motorMovePosXYZCmd(pTModule, pTModule->mIntCmd.mCmdPosXYZ);
-          printf("conf motor all move postion:%f, now postion:%f\n",  pTModule->mIntCmd.mCmdPosXYZ.v_p[0], pTModule->mRecUseMsg.mMotors[0].mPosition);
-          //send rec running data to uper
-      }
-      else
-      {
-          motorAllStopCmd(pTModule);
-          setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_LIFT_STOPED, 0, 0);
-      }
       break;
     }
     case BASE::ST_ALL_PULL_RUNNING:
@@ -734,30 +717,10 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
     //上位机发来的cmd是不是停止命令，如果是的话就停止电机转动
     case BASE::CMD_ALL_MOVE_STOP:
     case BASE::CMD_ALL_PULL_STOP:
-    case BASE::CMD_HAND_MOVE_STOP:
     {
       setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_LIFT_STOPED, 0, 0);
       printf("conf motor cmd stop\n");
       LOGER::PrintfLog(BASE::S_APP_LOGER, "***conf state: have motor stop. motor state:%d", pTModule->mIsNowMotorCmd);
-      pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
-      break;
-    }
-    case BASE::CMD_HAND_MOVE_START:
-    {
-      BASE::LiftCmdData lMovedata = {0};
-      pthread_mutex_lock(&pTModule->mMotorMutex);
-      memcpy((char*)&lMovedata, (char*)&pTModule->mMoveData, sizeof(BASE::LiftCmdData));
-      pthread_mutex_unlock(&pTModule->mMotorMutex);
-
-      //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
-      memset((char*)&pTModule->mIntCmd.mCmdV, 0, sizeof(pTModule->mIntCmd.mCmdV));
-      //速度控制
-      if(lMovedata.isVevOrPos == 0)
-      {
-        memcpy((char*)pTModule->mIntCmd.mCmdV.v_p, (char*)lMovedata.v_p, sizeof(float)*4);
-      }
-      printf("-----------------%f \n", pTModule->mIntCmd.mCmdV.v_p[0]);
-      setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_HAND_MOVE_RUNNING, 0, 0);
       pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
       break;
     }
@@ -769,10 +732,10 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
       pthread_mutex_unlock(&pTModule->mMotorMutex);
 
       //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
-      memset((char*)&pTModule->mIntCmd.mCmdPosXYZ, 0, sizeof(pTModule->mIntCmd.mCmdPosXYZ));
+      memset((char*)&pTModule->mIntCmd.mCmdV, 0, sizeof(pTModule->mIntCmd.mCmdV));
       if(lMovedata.isVevOrPos == 1)
       {
-        memcpy((char*)pTModule->mIntCmd.mCmdPosXYZ.v_p, (char*)lMovedata.v_p, sizeof(float)*4);
+        memcpy((char*)pTModule->mIntCmd.mCmdV.v_p, (char*)lMovedata.v_p, sizeof(float)*4);
       }
       setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_ALL_MOVE_RUNNING, 0, 0);
       pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
@@ -951,10 +914,10 @@ static int32_t checkRecMsgError(BASE::ARMS_THREAD_INFO *pTModule)
   //检查拉力是否出错
   float tensiosV = readTensionValue(pTModule);
   //float mTempL =  (float)pTModule->mRecMsg.mTension;
-  if(tensiosV < 0 || (tensiosV/(pTModule->mMagicControl.mM*10)) < 0.5)
+  if(tensiosV < 0 || (tensiosV/(pTModule->mConfParam->mConfSaveWeight*10)) < 0.5)
   {
     iRet = -1;
-    LOGER::PrintfLog(BASE::S_APP_LOGER,"chaochu:%f  %f\n", tensiosV, (tensiosV/(pTModule->mMagicControl.mM*10)));
+    LOGER::PrintfLog(BASE::S_APP_LOGER,"chaochu:%f  %f\n", tensiosV, (tensiosV/(pTModule->mConfParam->mConfSaveWeight*10)));
   }
 
   return iRet;
@@ -968,6 +931,9 @@ static int32_t checkRecMsgError(BASE::ARMS_THREAD_INFO *pTModule)
 static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
 {
   BASE::MagicControlData *pControl = &(pTModule->mMagicControl);
+  float mM = pTModule->mConfParam->mConfSaveWeight;
+  float mWn = pTModule->mConfParam->mWn;
+  float mCo = pTModule->mConfParam->mCo;
   //计算拉力 摆动角度导数
   float d_f_measure = (pControl->F_reco[0] - pControl->F_reco[1])/pTModule->sysDt;
   //printf("f_0:%f, f_1:%f\n",pControl->F_reco[0],pControl->F_reco[1]);
@@ -984,13 +950,13 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //  alfa_m = 0;
   //}
   //对外力进行估算
-  float f_estimate = -pControl->mK1 * ddalfi_measure - pControl->mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
+  float f_estimate = -pControl->mK1 * ddalfi_measure - mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
 
 
 
 
-  float dd_Lz = (-f_estimate + 0.2*d_f_measure)/pControl->mM  +
-                 0.2*((2*pControl->mCo*pControl->mWn*d_alfi_measure+pow(pControl->mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/pControl->mM;
+  float dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
+                0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
 
 
   //printf("mK1:%f mM:%f last_dd_Lz:%f mK:%f  mL:%f\n",
@@ -1067,6 +1033,8 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   //需要根据磁栅尺计算当前XY偏角
   //pTModule->mMagicControl.mRopeEndL = getEndPosBySikoXY(pTModule->mRecUseMsg.mSiko1, pTModule->mRecUseMsg.mSiko2, 3.0, 0.5);
   BASE::POS_2  mRopeEndL;
+  float kp = pTModule->mConfParam->mFollowKp;
+  float kd = pTModule->mConfParam->mFollowKd;
   //mRopeEndL.x = pTModule->mRecUseMsg.mSiko1 * (3.0/0.5);
   //mRopeEndL.y = pTModule->mRecUseMsg.mSiko2 * (3.0/0.5);
   //x y轴设置死区间
@@ -1075,10 +1043,8 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 
   BASE::ACC_2 mAcc;
   //mAcc = pidGetDa(pTModule->mMagicControl.mRopeEndL, pTModule->mMagicControl.mRopeEndLastL, 0.01);
-  mAcc.x = CONF::PID_P_FOLLOWUP * mRopeEndL.x
-         + CONF::PID_D_FOLLOWUP*(mRopeEndL.x-pTModule->mMagicControl.mRopeEndLastL.x)/pTModule->sysDt;
-  mAcc.y = CONF::PID_P_FOLLOWUP * mRopeEndL.y
-         + CONF::PID_D_FOLLOWUP*(mRopeEndL.y-pTModule->mMagicControl.mRopeEndLastL.y)/pTModule->sysDt;
+  mAcc.x = kp * mRopeEndL.x + kd*(mRopeEndL.x-pTModule->mMagicControl.mRopeEndLastL.x)/pTModule->sysDt;
+  mAcc.y = kp * mRopeEndL.y + kd*(mRopeEndL.y-pTModule->mMagicControl.mRopeEndLastL.y)/pTModule->sysDt;
 
 
   pTModule->mMagicControl.mRopeEndLastL = mRopeEndL;

@@ -363,14 +363,13 @@ static int32_t startModules(void) {
   {
     memset((char*)&mArmsModule[qIdx-1].mMagicControl, 0, sizeof (mArmsModule[qIdx-1].mMagicControl));
     mArmsModule[qIdx-1].sysDt = ((float)CONF::nDelay)/1000000.0;
-    getIniKeyValue((char*)"mG", mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&(mArmsModule[qIdx-1].mMagicControl.mG));
     getIniKeyValue((char*)"mK",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mK);
     getIniKeyValue((char*)"mL",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mL);
-    getIniKeyValue((char*)"mM",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mM);
-    getIniKeyValue((char*)"mWn",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mWn);
+    //getIniKeyValue((char*)"mM",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mM);
+    //getIniKeyValue((char*)"mWn",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mWn);
     getIniKeyValue((char*)"mNdecrease",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mNdecrease);
     getIniKeyValue((char*)"mR",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mR);
-    getIniKeyValue((char*)"mCo",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mCo);
+    //getIniKeyValue((char*)"mCo",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mCo);
   }
 
 
@@ -491,25 +490,6 @@ static void handleInteractionCmd()
 
         switch (buttonType)
         {
-          case BASE::CMD_HAND_MOVE_START : case BASE::CMD_HAND_MOVE_STOP:
-          {
-            BASE::LiftCmdData *mMove = (BASE::LiftCmdData *)mmRecMsg.Datas;
-            //copy move to leaders
-            if(mMove->mMudoleNum >=  DEF_SYS_USE_ARMS_NUMS)
-            {
-                int maxNum = DEF_SYS_USE_ARMS_NUMS;
-                LOGER::PrintfLog(BASE::S_APP_LOGER, "conf, move module num:%d >= max arms num:%d", mMove->mMudoleNum, maxNum);
-                printf("conf, move module num:%d >= max arms num:%d\n", mMove->mMudoleNum, maxNum);
-            }
-            else
-            {
-                pthread_mutex_lock(&mArmsModule[mMove->mMudoleNum].mMotorMutex);
-                mArmsModule[mMove->mMudoleNum].mIsNowMotorCmd = buttonType;
-                memcpy((char*)&mArmsModule[mMove->mMudoleNum].mMoveData, mmRecMsg.Datas, sizeof(BASE::LiftCmdData));
-                pthread_mutex_unlock(&mArmsModule[mMove->mMudoleNum].mMotorMutex);
-            }
-            break;
-          }
           case BASE::CMD_ALL_MOVE_START:
           {
             BASE::LiftCmdData *mAllMove = (BASE::LiftCmdData *)mmRecMsg.Datas;

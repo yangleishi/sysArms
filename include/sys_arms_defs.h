@@ -471,8 +471,7 @@ const uint16_t  CMD_LINK = CMD_BASE + 1;
 const uint16_t  CMD_UNLINK = CMD_BASE + 2;
 const uint16_t  CMD_SAVE_CONF = CMD_BASE + 3;
 const uint16_t  CMD_READ_CONF = CMD_BASE + 4;
-const uint16_t  CMD_HAND_MOVE_START = CMD_BASE + 5;
-const uint16_t  CMD_HAND_MOVE_STOP = CMD_BASE + 6;
+
 const uint16_t  CMD_ALL_MOVE_START = CMD_BASE + 7;
 const uint16_t  CMD_ALL_MOVE_STOP = CMD_BASE + 8;
 const uint16_t  CMD_ALL_PULL_START = CMD_BASE + 9;
@@ -561,8 +560,16 @@ typedef struct{
   float mConfSaveWeight;
   float mConfSaveSikoX;
   float mConfSaveSikoY;
-
   float mConfSaveEncoderT;
+
+  //随动算法用到的pd值
+  float mFollowKp;
+  float mFollowKd;
+
+  //拉力算法用到的
+  float mWn;
+  float mCo;
+
   int   mIsValid;
 } ConfData;
 
@@ -649,7 +656,7 @@ typedef struct
 {
   /******************初始参数***********************/
   //悬掉重物质量，旋转臂长、转动惯量、弹簧弹性系数、绳索卷筒半径、减速机的减速比、三周期传感器角速度、三周期传感器拉力、重力加速度、阻尼系数、角速度、K1系数
-  float mM, mL, mJ, mK, mR, mNdecrease, alfa_reco[3],F_reco[3],mG,mCo,mWn,mK1;
+  float  mL, mJ, mK, mR, mNdecrease, alfa_reco[3],F_reco[3],mK1;
 
   /*********************拉力平衡算法*********************/
   //绳索释放加速度,电机释放角速度,上一个周期释放绳索加速度
@@ -747,7 +754,7 @@ typedef struct: public THREAD_INFO_HEADER
   //线程在每个状态下运行条件
   BASE::M_STATE_CONDITIONS mCond;
 
-  //标定参数，初始编码器真值，重物参数
+  //标定参数，初始编码器真值，重物参数，内存在supr
   BASE::ConfData *mConfParam;
 
 ////////////控制算法需要的数据////////////////////////////////
@@ -787,7 +794,7 @@ typedef struct: public THREAD_INFO_HEADER
 
   InteractionDataToSupr  *mInterToSuprDatas;
   SuprDataToInteraction  *mSuprDatasToInterasction;
-  //标定参数 所有模块的，初始编码器真值，重物参数
+  //标定参数 所有模块的，初始编码器真值，重物参数，内存在supr
   BASE::ConfData *mConfParam;
 
 }INTERACTION_THREAD_INFO;

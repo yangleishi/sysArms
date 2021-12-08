@@ -127,6 +127,7 @@ static int readConfig(BASE::ConfData * mParame)
   BASE::ConfData * mTParame = mParame;
   FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "r");
 
+  //还没有配置文件，先生成
   if(pFile == NULL)
   {
     if((pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "w")) == NULL)
@@ -137,11 +138,15 @@ static int readConfig(BASE::ConfData * mParame)
 
     for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
     {
-      fprintf(pFile, "%f %f %f %f\n", CONF::IN_MAX_TENSION[i], CONF::IN_OFFSET_X[i], CONF::IN_OFFSET_Y[i], CONF::IN_OFFSET_ANGLE[i]);
-      mTParame->mConfSaveWeight = CONF::IN_MAX_TENSION[i];
-      mTParame->mConfSaveSikoX = CONF::IN_OFFSET_X[i];
-      mTParame->mConfSaveSikoY = CONF::IN_OFFSET_Y[i];
-      mTParame->mConfSaveEncoderT = CONF::IN_OFFSET_ANGLE[i];
+      fprintf(pFile, "%f %f %f %f %f %f %f %f\n",
+                                      mTParame->mConfSaveWeight,
+                                      mTParame->mConfSaveSikoX,
+                                      mTParame->mConfSaveSikoY,
+                                      mTParame->mConfSaveEncoderT,
+                                      mTParame->mFollowKp,
+                                      mTParame->mFollowKd,
+                                      mTParame->mWn,
+                                      mTParame->mCo);
       mTParame++;
     }
     fclose(pFile);
@@ -152,12 +157,15 @@ static int readConfig(BASE::ConfData * mParame)
   for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
   {
 
-    fscanf(pFile, "%f %f %f %f\n",
+    fscanf(pFile, "%f %f %f %f %f %f %f %f\n",
                     &(mTParame->mConfSaveWeight),
                     &(mTParame->mConfSaveSikoX),
                     &(mTParame->mConfSaveSikoY),
-                    &(mTParame->mConfSaveEncoderT)
-                    );
+                    &(mTParame->mConfSaveEncoderT),
+                    &(mTParame->mFollowKp),
+                    &(mTParame->mFollowKd),
+                    &(mTParame->mWn),
+                    &(mTParame->mCo));
 
     //printf("%f %f %f %f %f %f\n",mTParame->mConfSaveWeight, mTParame->mConfSaveEncoderX, mTParame->mConfSaveEncoderY,
     //                             mTParame->mConfSaveEncoderZ, mTParame->mConfSaveEncoderP, mTParame->mConfSaveEncoderT);
@@ -188,24 +196,32 @@ static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
   {
       if(sParame[i].mIsValid == 1)
       {
-          mParames[i].mConfSaveWeight = sParame[i].mConfSaveWeight;
-          mParames[i].mConfSaveSikoX = sParame[i].mConfSaveSikoX;
-          mParames[i].mConfSaveSikoY = sParame[i].mConfSaveSikoY;
-          mParames[i].mConfSaveEncoderT = sParame[i].mConfSaveEncoderT;
+          memcpy((char*)&mParames[i], (char*)&(sParame[i]), sizeof(BASE::ConfData));
       }
   }
 
-  printf("%f \n",sParame[0].mConfSaveEncoderT);
+  //printf("%f \n",sParame[0].mConfSaveEncoderT);
 
   for (int i=0; i<mPNum; i++)
   {
-    fprintf(pFile, "%f %f %f %f\n",
-                   mParames[i].mConfSaveWeight,
-                   mParames[i].mConfSaveSikoX,
-                   mParames[i].mConfSaveSikoY,
-                   mParames[i].mConfSaveEncoderT);
-    printf("%f %f %f %f  %d\n",mParames[i].mConfSaveWeight, mParames[i].mConfSaveSikoX, mParames[i].mConfSaveSikoY,
-                                     mParames[i].mConfSaveEncoderT, mParames[i].mIsValid);
+    fprintf(pFile, "%f %f %f %f %f %f %f %f\n",
+                                    mParames[i].mConfSaveWeight,
+                                    mParames[i].mConfSaveSikoX,
+                                    mParames[i].mConfSaveSikoY,
+                                    mParames[i].mConfSaveEncoderT,
+                                    mParames[i].mFollowKp,
+                                    mParames[i].mFollowKd,
+                                    mParames[i].mWn,
+                                    mParames[i].mCo);
+    printf("%f %f %f %f %f %f %f %f\n",
+           mParames[i].mConfSaveWeight,
+           mParames[i].mConfSaveSikoX,
+           mParames[i].mConfSaveSikoY,
+           mParames[i].mConfSaveEncoderT,
+           mParames[i].mFollowKp,
+           mParames[i].mFollowKd,
+           mParames[i].mWn,
+           mParames[i].mCo);
   }
 
   //拷贝给leader线程
@@ -217,6 +233,10 @@ static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
           pTModule->mConfParam[i].mConfSaveSikoX = sParame[i].mConfSaveSikoX;
           pTModule->mConfParam[i].mConfSaveSikoY = sParame[i].mConfSaveSikoY;
           pTModule->mConfParam[i].mConfSaveEncoderT = sParame[i].mConfSaveEncoderT;
+          pTModule->mConfParam[i].mFollowKp = sParame[i].mFollowKp;
+          pTModule->mConfParam[i].mFollowKd = sParame[i].mFollowKd;
+          pTModule->mConfParam[i].mWn = sParame[i].mWn;
+          pTModule->mConfParam[i].mCo = sParame[i].mCo;
       }
   }
 
@@ -426,9 +446,6 @@ void* threadEntry(void* pModule)
       }
       case BASE::CMD_READ_CONF:
       {
-        memset((char*)mParames, 0, sizeof(BASE::ConfData)*DEF_SYS_MAX_ARMS_NUMS);
-        readConfig(mParames);
-
         printf("interaction CMD read conf\n");
         sendMsgToUpper(pTModule, BASE::CMD_ACK_READCONF_OK, 0, (char*)&mParames, sizeof(BASE::ConfData)*DEF_SYS_MAX_ARMS_NUMS);
         break;
@@ -436,13 +453,6 @@ void* threadEntry(void* pModule)
       case BASE::CMD_READ_CYC:
       {
         sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_CYC, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
-        break;
-      }
-      case BASE::CMD_HAND_MOVE_START:
-      case BASE::CMD_HAND_MOVE_STOP:
-      {
-        if(pTModule->mState = BASE::M_STATE_CONF)
-            sendMsgToSupr(pTModule, pTModule->mRecMsg.CmdIdentify);
         break;
       }
       case BASE::CMD_CYC_READ_LIFT_DATAS:
