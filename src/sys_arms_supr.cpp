@@ -671,7 +671,6 @@ static int32_t suprMainLoop(){
         LOGER::PrintfLog(BASE::S_APP_LOGER, "clock_nanosleep failed. errno:");
       continue;
     }
-
     // if one arm error then set other stop, or man-interaction error set stop
     checkArmsWorking();
 
@@ -694,9 +693,6 @@ static int32_t suprMainLoop(){
     pthread_mutex_lock(&mSuprDataToInt.mArmsNowDatasMutex);
     for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
     {
-      //copy conf lift datas
-      //copy HZ datas
-      //memcpy((char*)&mSuprDataToInt.mReadLiftHzDatas[qIdx], (char*)&mArmsModule[qIdx].mReadLiftHzData, sizeof(BASE::ReadLiftSigalNowData));
       //copy run datas
       memcpy((char*)&mSuprDataToInt.mRecMsgsDatas[qIdx], (char*)&mArmsModule[qIdx].mRecUseMsg, sizeof(BASE::ARMS_R_USE_MSG));
     }

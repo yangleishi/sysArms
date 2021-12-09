@@ -22,7 +22,7 @@ namespace CONF {
 //最大可以使用的机械臂leader数量
 #define DEF_SYS_MAX_ARMS_NUMS 8
 //系统中使用的机械臂leader数量
-#define DEF_SYS_USE_ARMS_NUMS 4
+#define DEF_SYS_USE_ARMS_NUMS 3
 
 //最大可以使用的拉力计接收模块数量
 #define DEF_SYS_MAX_TENSIONLEADER_NUMS 2

@@ -380,6 +380,10 @@ void* threadEntry(void* pModule)
     pTModule->mConfParam[i].mConfSaveSikoX = mParames[i].mConfSaveSikoX;
     pTModule->mConfParam[i].mConfSaveSikoY = mParames[i].mConfSaveSikoY;
     pTModule->mConfParam[i].mConfSaveEncoderT = mParames[i].mConfSaveEncoderT;
+    pTModule->mConfParam[i].mFollowKp = mParames[i].mFollowKp;
+    pTModule->mConfParam[i].mFollowKd = mParames[i].mFollowKd;
+    pTModule->mConfParam[i].mWn = mParames[i].mWn;
+    pTModule->mConfParam[i].mCo = mParames[i].mCo;
   }
 
   //初始化模块
