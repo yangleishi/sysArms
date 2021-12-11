@@ -49,7 +49,7 @@ BASE::LOG_THREAD_INFO  mlogsModule;
 
 //上位机界面中初始标定传感器参数，一份保存在文件中，供leader使用
 BASE::ConfData     mCalibParam[DEF_SYS_USE_ARMS_NUMS];
-
+int                mIsRun[DEF_SYS_USE_ARMS_NUMS] = {0};
 
 BASE::INTERACTION_THREAD_INFO mManInteraction;
 //interaction to supr
@@ -323,6 +323,7 @@ static int32_t startModules(void) {
   mManInteraction.mInterToSuprDatas = &mInteractionDatas;
   mManInteraction.mSuprDatasToInterasction  = &mSuprDataToInt;
   mManInteraction.mConfParam = mCalibParam;
+  mManInteraction.mIsRun = mIsRun;
   gHiMInfo[CONF::ARMS_INTERACTION_ID].mPid    =  BASE::hiCreateThread(
                                                                      CONF::MN_INTERACTION_NAME,
                                                                      INTERACTIONER::threadEntry,
@@ -350,6 +351,7 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mConfParam = &mCalibParam[qIdx-1];
     mArmsModule[qIdx-1].mCpuAffinity  = CONF::CPU_LEAD;
     mArmsModule[qIdx-1].mIsNowMotorCmd = 0;
+    mArmsModule[qIdx-1].mIsRun = &(mIsRun[qIdx-1]);
     gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_NAME[qIdx],
                                                  LEADER::threadEntry,
                                                  CONF::PRI_LEAD,
@@ -535,6 +537,19 @@ static void handleInteractionCmd()
             break;
           }
           case BASE::CMD_RUN_START:
+          {
+            int *mm = (int*)mmRecMsg.Datas;
+            //copy move to leaders
+            for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
+            {
+              pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+              *(mArmsModule[i].mIsRun) = mm[i];
+              mArmsModule[i].mIsNowMotorCmd = buttonType;
+              pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
+            }
+            //printf("%d %d %d %d*********supr\n",mIsRun[0],mIsRun[1],mIsRun[2],mIsRun[3]);
+            break;
+          }
           case BASE::CMD_RUN_STOP:
           {
             //copy move to leaders

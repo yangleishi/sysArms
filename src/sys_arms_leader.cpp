@@ -575,17 +575,6 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
   {
     case BASE::ST_ALL_MOVE_RUNNING:
     {
-      //test
-      /*
-      if((pTModule->mRCnt%500) == 0)
-      {
-          for (int i=0; i<4;i++)
-          {
-              pTModule->mIntCmd.mCmdV.v_p[i] = - pTModule->mIntCmd.mCmdV.v_p[i];
-          }
-      }
-      */
-
       //位置控制,暂时没有，机械臂板子只有速度控制
       //速度控制
       if((pTModule->mRCnt%10) == 0)
@@ -628,45 +617,47 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     //run mode
     case BASE::ST_ALL_RUN_RUNNING:
     {
-      static int ii = 0;
-      ii++;
-      //memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
-      if(ii<10)
+      if(*(pTModule->mIsRun) == 1)
       {
-        //编码器找零值
-        calibrationSensors(pTModule);
-      }
+          static int ii = 0;
+          ii++;
+          //memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
+          if(ii<10)
+          {
+            //编码器找零值
+            calibrationSensors(pTModule);
+          }
 
+          //TUDO PID ctrl move to (x y z)
+          //拉力控制算法
+          //缓冲200个周期在启动控制算法
+          if(ii > 200)
+          {
+            followagic(pTModule);
+            //pTModule->mMagicControl.mCmdV.v_p[0] = 0;
+            //pTModule->mMagicControl.mCmdV.v_p[1] = 0;
+            //pTModule->mMagicControl.mCmdV.v_p[2] = 0;
+            pullMagic(pTModule);//函数计算出收放收缩加速度。
+            ii = 600;
+          }else
+          {
+            memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
+          }
 
-      //TUDO PID ctrl move to (x y z)
+          //pTModule->mMagicControl.mCmdV.v_p[2] = 0;
+          if((pTModule->mRCnt%8) == 0)
+          LOGER::PrintfLog(BASE::S_APP_LOGER,"name:%s,ixv:%f iyv:%f izV:%f oxv:%f oyv:%f ozV:%f 兹山尺x:%f 兹山尺y:%f",
+                           pTModule->mThreadName, pTModule->mMagicControl.mCmdV.v_p[0],  pTModule->mMagicControl.mCmdV.v_p[1],pTModule->mMagicControl.mCmdV.v_p[2],
+                           pTModule->mRecUseMsg.mMotors[0].mSpeed,pTModule->mRecUseMsg.mMotors[1].mSpeed,pTModule->mRecUseMsg.mMotors[2].mSpeed,
+                           pTModule->mRecUseMsg.mSiko1,pTModule->mRecUseMsg.mSiko2);
 
-      //拉力控制算法
-      //缓冲200个周期在启动控制算法
+          BASE::VEL_4 mCmdV = pTModule->mMagicControl.mCmdV;
 
-      if(ii > 200)
-      {
-
-        followagic(pTModule);
-        //pTModule->mMagicControl.mCmdV.v_p[0] = 0;
-        //pTModule->mMagicControl.mCmdV.v_p[1] = 0;
-        //pTModule->mMagicControl.mCmdV.v_p[2] = 0;
-        pullMagic(pTModule);//函数计算出收放收缩加速度。
-        ii = 600;
+          motorMoveVXYZWCmd(pTModule, mCmdV);
       }else
       {
-        memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
+          motorAllStopCmd(pTModule);
       }
-
-      //pTModule->mMagicControl.mCmdV.v_p[2] = 0;
-      if((pTModule->mRCnt%8) == 0)
-      LOGER::PrintfLog(BASE::S_APP_LOGER,"name:%s,ixv:%f iyv:%f izV:%f oxv:%f oyv:%f ozV:%f 兹山尺x:%f 兹山尺y:%f",
-                       pTModule->mThreadName, pTModule->mMagicControl.mCmdV.v_p[0],  pTModule->mMagicControl.mCmdV.v_p[1],pTModule->mMagicControl.mCmdV.v_p[2],
-                       pTModule->mRecUseMsg.mMotors[0].mSpeed,pTModule->mRecUseMsg.mMotors[1].mSpeed,pTModule->mRecUseMsg.mMotors[2].mSpeed,
-                       pTModule->mRecUseMsg.mSiko1,pTModule->mRecUseMsg.mSiko2);
-
-      BASE::VEL_4 mCmdV = pTModule->mMagicControl.mCmdV;
-
-      motorMoveVXYZWCmd(pTModule, mCmdV);
 
       /*
       LOGER::PrintfLog(BASE::S_ARMS_DATA, "%d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f",

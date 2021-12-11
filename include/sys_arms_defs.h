@@ -131,7 +131,7 @@ const uint16_t   M_TYPE_TO_ALL_ANSWER_FAILED= 0x09;
 0x01 正时针运动
 0x02 逆时针运动
 0x03 正常停止(带减速过程)
-0x04 曲线变速
+0x04 清除错误
 0x05 梯形变速
 0x06 立即变速
 0x07 曲线改变位置
@@ -142,7 +142,8 @@ const uint8_t   CT_MOTOR_STOPE = 0x00;
 const uint8_t   CT_MOTOR_MOVE_POSITIVE = 0x01;
 const uint8_t   CT_MOTOR_MOVE_INVERSE  = 0x02;
 const uint8_t   CT_MOTOR_STOP = 0x03;
-const uint8_t   CT_MOTOR_MOVE_V_CURVE = 0x04;
+const uint8_t   CT_MOTOR_CLEAR_ERROR = 0x04;
+
 const uint8_t   CT_MOTOR_MOVE_V_TRAPEZIUM  = 0x05;
 const uint8_t   CT_MOTOR_MOVE_V_IMMEDIATELY = 0x06;
 const uint8_t   CT_MOTOR_MOVE_P_CURVE = 0x07;
@@ -637,7 +638,7 @@ typedef struct{
   int            mIsNewRec;
   int            mIsNewSend;
   MArmsDownData  mRecMsg;
-  MArmsUpData    mSendMsg;
+  //MArmsUpData    mSendMsg;
 
   pthread_mutex_t mInteractionRecMutex;
   pthread_mutex_t mInteractionSendMutex;
@@ -772,6 +773,7 @@ typedef struct: public THREAD_INFO_HEADER
 
 ////////////上位机发送的控制命令数据////////////////////////////////
   BASE::IntCmdData  mIntCmd;
+  int *mIsRun;
   //随即码
   uint16_t   mRandomCode;
 } ARMS_THREAD_INFO;
@@ -796,6 +798,7 @@ typedef struct: public THREAD_INFO_HEADER
   SuprDataToInteraction  *mSuprDatasToInterasction;
   //标定参数 所有模块的，初始编码器真值，重物参数，内存在supr
   BASE::ConfData *mConfParam;
+  int * mIsRun;
 
 }INTERACTION_THREAD_INFO;
 

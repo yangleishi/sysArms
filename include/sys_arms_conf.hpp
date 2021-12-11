@@ -22,9 +22,9 @@ namespace CONF {
 //最大可以使用的机械臂leader数量
 #define DEF_SYS_MAX_ARMS_NUMS 8
 //系统中使用的机械臂leader数量
-#define DEF_SYS_USE_ARMS_NUMS 3
+#define DEF_SYS_USE_ARMS_NUMS 4
 
-//最大可以使用的拉力计接收模块数量
+//最大可以使用的拉力计接收模块数量4444
 #define DEF_SYS_MAX_TENSIONLEADER_NUMS 2
 
 //系统中使用的拉力计接收模块数量，0时候采用有线传输（拉力计信息在有线传输协议里）
@@ -124,8 +124,8 @@ const int SERVER_UDP_TIMEOUT_S = 0;
 const int SERVER_UDP_TIMEOUT_US = 9500;
 const int SERVER_UDP_TENSION_TIMEOUT_S = 1;
 const int SERVER_UDP_TENSION_TIMEOUT_US = 0;
-const int SERVER_UDP_INTERACTION_TIMEOUT_S = 1;
-const int SERVER_UDP_INTERACTION_TIMEOUT_US = 0;
+const int SERVER_UDP_INTERACTION_TIMEOUT_S = 0;
+const int SERVER_UDP_INTERACTION_TIMEOUT_US = 10000;
 
 //定义线程模块优先级
 const int PRI_SUPR = 50;
