@@ -309,7 +309,11 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
     pTModule->mMagicControl.alfa_reco[0] = pTModule->mRecUseMsg.mEncoderTurns;
   */
 
+  //pTModule->mMagicControl.alfa_reco[0] = deadZone(pTModule->mRecUseMsg.mEncoderTurns, 0.05);
   pTModule->mMagicControl.alfa_reco[0] = pTModule->mRecUseMsg.mEncoderTurns;
+
+  //pTModule->mMagicControl.alfa_reco[0] = 0;
+
   pTModule->mMagicControl.F_reco[0] = readTensionValue(pTModule);
 
   //printf("tens value:%f\n",pTModule->mMagicControl.F_reco[0]);
@@ -1002,7 +1006,8 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //printf("************* ddalfi_measure:%f alfa_reco:%f %f %f\n",
   //                       pControl->ddalfi_measure, pControl->alfa_reco[0], pControl->alfa_reco[1], pControl->alfa_reco[2]);
 
-  float alfa_m = pControl->alfa_reco[0];
+  float alfa_m = deadZone(pControl->alfa_reco[0], 0.03);
+  //float alfa_m = pControl->alfa_reco[0];
   //if(fabs(alfa_m) < 1.5/60)
   //{
   //  alfa_m = 0;
@@ -1013,8 +1018,8 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
 
 
 
-  float dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
-                0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
+  float dd_Lz = (-f_estimate + 0.3*d_f_measure)/mM  +
+                0.08*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
 
 
   //printf("mK1:%f mM:%f last_dd_Lz:%f mK:%f  mL:%f\n",
@@ -1053,10 +1058,10 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   mTempVel /= (AVG_SIZE+1.0);
 
   //限制速度
-  if(mTempVel > 80)
-      mTempVel = 80;
-  if(mTempVel < -80)
-      mTempVel = -80;
+  if(mTempVel > 50)
+      mTempVel = 50;
+  if(mTempVel < -50)
+      mTempVel = -50;
 
   //检查机械臂是否有错
   if(checkRecMsgError(pTModule) < 0)
@@ -1279,11 +1284,12 @@ void* threadEntry(void* pModule)
       {
         //接近开关限位
         if((pTModule->mRCnt%8) == 0)
-            LOGER::PrintfLog(BASE::S_APP_LOGER, "模块：%s,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d,v1:%f,v2:%f,v3:%f,v4:%f",
+            LOGER::PrintfLog(BASE::S_APP_LOGER, "模块：%s,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d,v1:%.4f,v2:%.4f,v3:%.4f,v4:%.4f p1:%.4f,p2:%.4f,p3:%.4f,p4:%.4f",
                                              pTModule->mThreadName,  pTModule->mRecMsg.mRandomCode,
                                              pTModule->mRecMsg.mSwitchStateCode,pTModule->mRecMsg.mInclinometer1_x, pTModule->mRecMsg.mInclinometer1_y,
                                              pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,pTModule->mRecMsg.mEncoderTurns,pTModule->mRecMsg.mTension,
-                                             pTModule->mRecMsg.mMotors[0].mSpeed, pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[3].mSpeed);
+                                             pTModule->mRecMsg.mMotors[0].mSpeed, pTModule->mRecMsg.mMotors[1].mSpeed,pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[3].mSpeed,
+                                             pTModule->mRecMsg.mMotors[0].mPosition, pTModule->mRecMsg.mMotors[1].mPosition,pTModule->mRecMsg.mMotors[2].mPosition,pTModule->mRecMsg.mMotors[3].mPosition);
 
         confFire(pTModule);
         break;

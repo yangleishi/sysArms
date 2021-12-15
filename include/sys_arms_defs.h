@@ -25,7 +25,7 @@
 #define STR_IPV4_LENGTH     16
 
 #define	PRINT_QUEUE_MAX_ITEMS		5120
-#define	PRINT_STRING_MAX_LENGTH		128
+#define	PRINT_STRING_MAX_LENGTH		256
 
 //电机速度 ，脉冲/s,1rpm 等于 10000/60
 #define MOTOR_V_TO_S            (166)
