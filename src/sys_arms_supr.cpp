@@ -89,6 +89,7 @@ static void handleArmsCrossing();
 static void handleInteractionCmd();
 static void changeState();
 static int32_t getIniKeyValue(char *key, char* mnName, char *filename, float* value);
+static int32_t checkArmsCross(void);
 
 static int32_t deInitSupr(void);
 ////////////////////////////////////////////////////////////////////////////////
@@ -465,6 +466,17 @@ static void handleArmsCrossing()
 {
   //check all arms rec msg
   //TODU*******  calculation and check arms are crossing
+  /*
+  if(checkArmsCross()<0)
+  {
+    for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
+    {
+      pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+      mArmsModule[i].mIsNowMotorCmd = BASE::CMD_RUN_STOP;
+      pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
+    }
+  }
+  */
 
   //set all arms rec msg false.until nest msg come
   for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
@@ -677,6 +689,33 @@ static void changeState()
 
 }
 
+/******************************************************************************
+* 功能：supr检查机械臂是否交叉
+* @return Descriptions
+******************************************************************************/
+static int32_t checkArmsCross(void)
+{
+  int32_t iRet = 0;
+  float xy[2] = {0};
+  float xyT[2] = {0};
+
+  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; ++i)
+  {
+    xy[0] = mArmsModule[i].mRecUseMsg.mMotors[0].mPosition;
+    xy[1] = mArmsModule[i].mRecUseMsg.mMotors[1].mPosition;
+    for (int j=i+1; j<DEF_SYS_USE_ARMS_NUMS; ++j)
+    {
+      xyT[0] = mArmsModule[j].mRecUseMsg.mMotors[0].mPosition;
+      xyT[1] = mArmsModule[j].mRecUseMsg.mMotors[1].mPosition;
+
+      float dertX = (xy[0]-xyT[0])*(xy[0]-xyT[0]);
+      float dertY = (xy[1]-xyT[1])*(xy[1]-xyT[1]);
+      if(sqrt(dertX+dertY)<0.03)
+        return -1;
+    }
+  }
+  return iRet;
+}
 /******************************************************************************
 * 功能：supr线程陷入函数，周期性的控制leader等线程运行
 * @return Descriptions
