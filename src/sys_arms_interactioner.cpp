@@ -30,7 +30,6 @@ static BASE::ConfData mParames[DEF_SYS_MAX_ARMS_NUMS] = {0};
 
 namespace INTERACTIONER {
 
-
 static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule);
 static void setFdTimeout(int sockfd, const int mSec, const int mUsec);
 
@@ -454,6 +453,13 @@ void* threadEntry(void* pModule)
         sendMsgToUpper(pTModule, BASE::CMD_ACK_READCONF_OK, 0, (char*)&mParames, sizeof(BASE::ConfData)*DEF_SYS_MAX_ARMS_NUMS);
         break;
       }
+      case BASE::CMD_CALIBRATE_ARM:
+      {
+        if(pTModule->mState == BASE::M_STATE_CONF)
+            sendMsgToSupr(pTModule, BASE::CMD_CALIBRATE_ARM);
+        printf("interaction CMD calibrate start\n");
+        break;
+      }
       case BASE::CMD_READ_CYC:
       {
         sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_CYC, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
@@ -493,8 +499,8 @@ void* threadEntry(void* pModule)
             BASE::LiftCmdData *mAllPull = (BASE::LiftCmdData *)pTModule->mRecMsg.Datas;
             for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
             {
-                if(mAllPull[i].mIsValid)
-                    mAllPull[i].v_p[3] *= ((mParames[i].mConfSaveWeight)/100.0);
+              if(mAllPull[i].mIsValid)
+                mAllPull[i].v_p[2] *= ((mParames[i].mConfSaveWeight)/100.0);
             }
             sendMsgToSupr(pTModule, BASE::CMD_ALL_PULL_START);
         }

@@ -484,6 +484,8 @@ const uint16_t  CMD_RUN_STOP_E = CMD_BASE + 13;
 const uint16_t  CMD_QUIT = CMD_BASE + 14;
 const uint16_t  CMD_READ_PLAYBACK = CMD_BASE + 15;
 const uint16_t  CMD_READ_CYC = CMD_BASE + 16;
+const uint16_t  CMD_CLEAR_MOTOR_ERROR = CMD_BASE + 17;
+const uint16_t  CMD_CALIBRATE_ARM = CMD_BASE + 18;
 
 //接收到上位机控制按钮后，运行期间leader陷入条件运行状态
 const uint16_t  CMD_INTO_COND_RUN = CMD_BASE + 20;
@@ -502,6 +504,7 @@ const uint16_t  ST_LIFT_STOPED = CMD_BASE + 53;
 
 const uint16_t  ST_ALL_RUN_RUNNING = CMD_BASE + 54;
 const uint16_t  ST_RUN_STOPED = CMD_BASE + 55;
+const uint16_t  ST_ALL_CALBRATE = CMD_BASE + 56;
 
 //////////////////////interaction ACK指令//////////////
 const uint16_t  CMD_ACK_BASE = 0;
@@ -601,6 +604,14 @@ typedef struct{
   int   mIsValid;     //是否有效
 } LiftCmdData;
 
+
+//起吊界面上位机控制数据
+typedef struct{
+  int    mMudoleNum;  //单元号
+  float  mCalKg;   //
+  int   mIsValid;     //是否有效
+} CalibrateData;
+
 //运行界面中细节信息显示,
 typedef struct{
   int     mMudoleNum;
@@ -678,6 +689,7 @@ typedef struct
   //执行的速度值
   BASE::VEL_4 mCmdV, mCmdPosXYZ, mCmdPosXYZW;
   float   mCmdTension;
+  float   mCalibKg;
 }IntCmdData;
 
 /////////////////////////////////整个系统中线程定义 //////////////////////////////////////////////
@@ -743,7 +755,8 @@ typedef struct: public THREAD_INFO_HEADER
 
   //rec motor cmd
   int                mIsNowMotorCmd;
-  LiftCmdData    mMoveData;
+  LiftCmdData      mMoveData;
+  CalibrateData    mCaliData;
 
   //电机传输命令锁
   pthread_mutex_t   mMotorMutex;

@@ -536,6 +536,22 @@ static void handleInteractionCmd()
             }
             break;
           }
+          case BASE::CMD_CALIBRATE_ARM:
+          {
+            BASE::CalibrateData *mCaliKg = (BASE::CalibrateData *)mmRecMsg.Datas;
+            //copy move to leaders
+            for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
+            {
+              if(mCaliKg[i].mIsValid)
+              {
+                pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+                mArmsModule[i].mIsNowMotorCmd = buttonType;
+                memcpy((char*)&mArmsModule[i].mCaliData, (char*)&mCaliKg[i], sizeof(BASE::CalibrateData));
+                pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
+              }
+            }
+            break;
+          }
           case BASE::CMD_RUN_START:
           {
             int *mm = (int*)mmRecMsg.Datas;

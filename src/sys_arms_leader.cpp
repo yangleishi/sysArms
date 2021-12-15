@@ -596,16 +596,51 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
       {
         //TUDO 正转  倒转
         if(tensiosKg > cmdKg)
-            motorMoveVWCmd(pTModule, 1);
+            motorMoveVZCmd(pTModule, 2);
         else
-            motorMoveVWCmd(pTModule, -1);
-         printf("conf motor all pull move:set tension %f, now tension:%f, state:%d\n",  pTModule->mIntCmd.mCmdTension, tensiosKg, pTModule->mIsNowMotorCmd);
+            motorMoveVZCmd(pTModule, -2);
+         //printf("conf motor all pull move:set tension %f, now tension:%f, state:%d\n",  pTModule->mIntCmd.mCmdTension, tensiosKg, pTModule->mIsNowMotorCmd);
       }
       else
       {
           motorAllStopCmd(pTModule);
           setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_LIFT_STOPED, 0, 0);
       }
+      break;
+    }
+    case BASE::ST_ALL_CALBRATE:
+    {
+      //pull 命令，根据拉立计信息慢慢的增加电机转速。
+      float  tensiosKg = readTensionValue(pTModule)/9.8;
+      float  cmdKg  =  pTModule->mIntCmd.mCalibKg;
+      float  encoderD = pTModule->mRecUseMsg.mEncoderTurns*57.29578;
+      printf("%s calibrate %f %f %f\n",pTModule->mThreadName,tensiosKg,cmdKg,encoderD);
+      //p d自标定算法
+      float kp = 5.0;
+      float kD = 10.0;
+      BASE::VEL_4 mCmdV = {0};
+
+      //编码器和卷扬机不能同时标定
+      if(fabs((tensiosKg-cmdKg))>0.1)
+      {
+        mCmdV.v_p[2] = kp*(tensiosKg-cmdKg);
+      }
+      else {
+        if(fabs(encoderD)>0.5)
+          mCmdV.v_p[3] = -kp*encoderD;
+      }
+
+      if(mCmdV.v_p[2]>50)
+          mCmdV.v_p[2] = 50;
+      if(mCmdV.v_p[2]<-50)
+          mCmdV.v_p[2] = -50;
+
+      if(mCmdV.v_p[3]>50)
+          mCmdV.v_p[3] = 50;
+      if(mCmdV.v_p[3]<-50)
+          mCmdV.v_p[3] = -50;
+
+      motorMoveVXYZWCmd(pTModule, mCmdV);
       break;
     }
     case BASE::ST_LIFT_STOPED:
@@ -763,6 +798,19 @@ static int32_t confFire(BASE::ARMS_THREAD_INFO *pTModule)
 
       //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
       setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_ALL_PULL_RUNNING, 0, 0);
+      pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
+      break;
+    }
+    case BASE::CMD_CALIBRATE_ARM:
+    {
+      //TUDO
+      pthread_mutex_lock(&pTModule->mMotorMutex);
+      //memcpy((char*)&Calidata, (char*)&pTModule->mCaliData, sizeof(BASE::CalibrateData));
+      pTModule->mIntCmd.mCalibKg = pTModule->mCaliData.mCalKg;
+      pthread_mutex_unlock(&pTModule->mMotorMutex);
+
+      //if Manual ctrl move mode than move (xyz), else move (0,0,0)(relative position)
+      setStateCond(pTModule->mCond, BASE::M_STATE_CONF, BASE::ST_ALL_CALBRATE, 0, 0);
       pTModule->mIsNowMotorCmd = BASE::CMD_INTO_COND_RUN;
       break;
     }
