@@ -368,13 +368,10 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].sysDt = ((float)CONF::nDelay)/1000000.0;
     getIniKeyValue((char*)"mK",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mK);
     getIniKeyValue((char*)"mL",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mL);
-    //getIniKeyValue((char*)"mM",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mM);
-    //getIniKeyValue((char*)"mWn",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mWn);
     getIniKeyValue((char*)"mNdecrease",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mNdecrease);
     getIniKeyValue((char*)"mR",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mR);
-    //getIniKeyValue((char*)"mCo",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mCo);
+    getIniKeyValue((char*)"mSikoK",mArmsModule[qIdx-1].mThreadName, (char*)"arms.ini", (float*)&mArmsModule[qIdx-1].mMagicControl.mSikoK);
   }
-
 
 // tension threads
   for (qIdx = 0; qIdx < CONF::ARMS_T_MAX_ID-CONF::ARMS_T_1_ID; qIdx++)

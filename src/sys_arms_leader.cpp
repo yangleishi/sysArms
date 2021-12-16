@@ -243,6 +243,9 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
 
   //拉力计除以100，变成g
   pTModule->mRecMsg.mTension /= 100;
+
+  //pTModule->mRecMsg.mTension = 40000;
+  //printf("拉力计:%d\n",pTModule->mRecMsg.mTension);
   int32_t mTempTension = pTModule->mRecMsg.mTension;
   //拉力计滤波
   for (int i=0; i<AVG_SIZE; i++)
@@ -260,9 +263,12 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   {
     pTModule->mRecUseMsg.mMotors[i].mSpeed = ((float)pTModule->mRecMsg.mMotors[findMotorNum(i)].mSpeed)*0.01745;
     //TUDU
-    pTModule->mRecUseMsg.mMotors[i].mPosition = ((float)pTModule->mRecMsg.mMotors[findMotorNum(i)].mPosition);
+    pTModule->mRecUseMsg.mMotors[i].mPosition = ((float)((pTModule->mRecMsg.mMotors[findMotorNum(i)].mPosition%1000000)/100));
   }
-
+  /*
+  printf("************pos:%d %d %d %d\n",pTModule->mRecMsg.mMotors[0].mPosition/10000,pTModule->mRecMsg.mMotors[1].mPosition/10000,
+                                         pTModule->mRecMsg.mMotors[2].mPosition/10000,pTModule->mRecMsg.mMotors[3].mPosition/10000);
+  */
   //限位开关
   pTModule->mRecUseMsg.mSwitchStateCode = pTModule->mRecMsg.mSwitchStateCode;
   pTModule->mRecUseMsg.mSwitchTiggers = pTModule->mRecMsg.mSwitchTiggers;
@@ -315,8 +321,6 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   //pTModule->mMagicControl.alfa_reco[0] = 0;
 
   pTModule->mMagicControl.F_reco[0] = readTensionValue(pTModule);
-
-  //printf("tens value:%f\n",pTModule->mMagicControl.F_reco[0]);
 }
 
 /******************************************************************************
@@ -1000,6 +1004,8 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   float d_f_measure = (pControl->F_reco[0] - pControl->F_reco[1])/pTModule->sysDt;
   //printf("f_0:%f, f_1:%f\n",pControl->F_reco[0],pControl->F_reco[1]);
 
+  //printf("***********alfa value:%f\n",);
+
   float d_alfi_measure = (pControl->alfa_reco[0] - pControl->alfa_reco[1])/pTModule->sysDt;
   float ddalfi_measure = (pControl->alfa_reco[0] - 2*pControl->alfa_reco[1] + pControl->alfa_reco[2])/(pTModule->sysDt*pTModule->sysDt);
 
@@ -1018,8 +1024,8 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
 
 
 
-  float dd_Lz = (-f_estimate + 0.3*d_f_measure)/mM  +
-                0.08*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
+  float dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
+                0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
 
 
   //printf("mK1:%f mM:%f last_dd_Lz:%f mK:%f  mL:%f\n",
@@ -1039,7 +1045,7 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //电机的加速度
   float d_w = dd_Lz/pControl->mR * pControl->mNdecrease;
 
-  if((pTModule->mRCnt%8) == 0)
+  //if((pTModule->mRCnt%8) == 0)
   printf("%s,dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f alfa_now:%f  d_w:%f  f_re:%f %f %f\n",pTModule->mThreadName,
           dd_Lz, f_estimate, d_f_measure, d_alfi_measure, alfa_m, pControl->alfa_reco[0],d_w, pControl->F_reco[0], pControl->F_reco[1],pControl->F_reco[2]);
 
@@ -1058,10 +1064,10 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   mTempVel /= (AVG_SIZE+1.0);
 
   //限制速度
-  if(mTempVel > 50)
-      mTempVel = 50;
-  if(mTempVel < -50)
-      mTempVel = -50;
+  if(mTempVel > 80)
+      mTempVel = 80;
+  if(mTempVel < -80)
+      mTempVel = -80;
 
   //检查机械臂是否有错
   if(checkRecMsgError(pTModule) < 0)
@@ -1098,13 +1104,13 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   BASE::POS_2  mRopeEndL;
   float kp = pTModule->mConfParam->mFollowKp;
   float kd = pTModule->mConfParam->mFollowKd;
-  //float kp = 10;
-  //float kd = 30;
+  float sikoK = pTModule->mMagicControl.mSikoK;
+
   //mRopeEndL.x = pTModule->mRecUseMsg.mSiko1 * (3.0/0.5);
   //mRopeEndL.y = pTModule->mRecUseMsg.mSiko2 * (3.0/0.5);
   //x y轴设置死区间
-  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1 * (3.0/0.5), 0.002);
-  mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2 * (3.0/0.5), 0.002);
+  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.002);
+  mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.002);
 
 
   BASE::ACC_2 mAcc;
@@ -1140,15 +1146,15 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 
 
   //限速
-  if(pTModule->mMagicControl.mCmdV.v_p[0] > 100)
-      pTModule->mMagicControl.mCmdV.v_p[0] = 100;
-  if(pTModule->mMagicControl.mCmdV.v_p[0] < -100)
-      pTModule->mMagicControl.mCmdV.v_p[0] = -100;
+  if(pTModule->mMagicControl.mCmdV.v_p[0] > 50)
+      pTModule->mMagicControl.mCmdV.v_p[0] = 50;
+  if(pTModule->mMagicControl.mCmdV.v_p[0] < -50)
+      pTModule->mMagicControl.mCmdV.v_p[0] = -50;
 
-  if(pTModule->mMagicControl.mCmdV.v_p[1] > 100)
-      pTModule->mMagicControl.mCmdV.v_p[1] = 100;
-  if(pTModule->mMagicControl.mCmdV.v_p[1] < -100)
-      pTModule->mMagicControl.mCmdV.v_p[1] = -100;
+  if(pTModule->mMagicControl.mCmdV.v_p[1] > 50)
+      pTModule->mMagicControl.mCmdV.v_p[1] = 50;
+  if(pTModule->mMagicControl.mCmdV.v_p[1] < -50)
+      pTModule->mMagicControl.mCmdV.v_p[1] = -50;
 
   //pTModule->mMagicControl.mCmdV.v_p[0] = 0;
   return 0;
@@ -1284,12 +1290,12 @@ void* threadEntry(void* pModule)
       {
         //接近开关限位
         if((pTModule->mRCnt%8) == 0)
-            LOGER::PrintfLog(BASE::S_APP_LOGER, "模块：%s,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d,v1:%.4f,v2:%.4f,v3:%.4f,v4:%.4f p1:%.4f,p2:%.4f,p3:%.4f,p4:%.4f",
+            LOGER::PrintfLog(BASE::S_APP_LOGER, "模块：%s,随即码:%d,接近开关:%d,倾角仪:%d %d,磁删尺:%d %d,编码器:%d,拉计:%d,速度(%.2f,%.2f,%.2f,%.2f),位置(%.1f,%.1f,%.1f,%.1f)",
                                              pTModule->mThreadName,  pTModule->mRecMsg.mRandomCode,
                                              pTModule->mRecMsg.mSwitchStateCode,pTModule->mRecMsg.mInclinometer1_x, pTModule->mRecMsg.mInclinometer1_y,
                                              pTModule->mRecMsg.mSiko1, pTModule->mRecMsg.mSiko2,pTModule->mRecMsg.mEncoderTurns,pTModule->mRecMsg.mTension,
-                                             pTModule->mRecMsg.mMotors[0].mSpeed, pTModule->mRecMsg.mMotors[1].mSpeed,pTModule->mRecMsg.mMotors[2].mSpeed,pTModule->mRecMsg.mMotors[3].mSpeed,
-                                             pTModule->mRecMsg.mMotors[0].mPosition, pTModule->mRecMsg.mMotors[1].mPosition,pTModule->mRecMsg.mMotors[2].mPosition,pTModule->mRecMsg.mMotors[3].mPosition);
+                                             pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[1].mSpeed,pTModule->mRecUseMsg.mMotors[2].mSpeed,pTModule->mRecUseMsg.mMotors[3].mSpeed,
+                                             pTModule->mRecUseMsg.mMotors[0].mPosition, pTModule->mRecUseMsg.mMotors[1].mPosition,pTModule->mRecUseMsg.mMotors[2].mPosition,pTModule->mRecUseMsg.mMotors[3].mPosition);
 
         confFire(pTModule);
         break;
