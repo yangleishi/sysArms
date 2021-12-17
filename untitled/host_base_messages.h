@@ -285,6 +285,22 @@ typedef struct
   float    mTension;         //单位为g
 } ARMS_R_USE_MSG;
 
+//多播数据结构
+typedef struct
+{
+  //frame unique dev
+  uint32_t   mIdentifier;
+  //随机码
+  uint32_t   mRandomCode;
+
+  //数据有效标识,标识传输的数据是否有效
+  int32_t    mMark[8];
+  //8套机械臂拉力计
+  int32_t    mTension[8];         //单位为g
+  //需要哪些数据随后加
+
+} ARMS_MULTICAST_UDP;
+
 
 /////////////////////////////////////////////////////下发配置数据////////////////////////////////////////
 typedef struct

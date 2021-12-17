@@ -1,0 +1,22 @@
+接收udp数据端ip 端口
+192.168.1.201
+10001
+
+数据协议：
+
+//多播数据结构
+typedef struct
+{
+  //frame unique dev
+  uint32_t   mIdentifier;
+  //随机码
+  uint32_t   mRandomCode;
+
+  //数据有效标识,标识8套机械臂传输的数据是否有效，0无效，1有效
+  int32_t    mMark[8];
+  //8套机械臂拉力计
+  int32_t    mTension[8];         //单位为g
+  //需要哪些数据随后加
+
+} ARMS_MULTICAST_UDP;
+

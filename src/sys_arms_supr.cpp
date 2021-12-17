@@ -563,12 +563,12 @@ static void handleInteractionCmd()
           }
           case BASE::CMD_RUN_START:
           {
-            int *mm = (int*)mmRecMsg.Datas;
+            int *mRunType = (int*)mmRecMsg.Datas;
             //copy move to leaders
             for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
             {
               pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
-              *(mArmsModule[i].mIsRun) = mm[i];
+              *(mArmsModule[i].mIsRun) = mRunType[i];
               mArmsModule[i].mIsNowMotorCmd = buttonType;
               pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
             }

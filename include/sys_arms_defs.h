@@ -532,6 +532,8 @@ const uint16_t  CMD_TYPE_BASE = 0;
 #define MSG_DOWN_DATA_MAX  400
 //上传数据发送的最大数据char
 #define MSG_UP_DATA_MAX  3000
+
+#define MAGIC_AVG_SIZE (20)
 /////////////////////////////////////////////////rec interactions/////////////////////////////////////
 //上位机发送给app的消息
 typedef struct
@@ -720,6 +722,9 @@ typedef struct
   //运行周期
   uint32_t     mRCnt;
 
+  //running状态，运行周期计数
+  uint32_t     mMagicRCnt;
+
 } THREAD_INFO_HEADER;
 
 //日志线程结构体信息loger thread info
@@ -780,8 +785,8 @@ typedef struct: public THREAD_INFO_HEADER
   //慈善尺滤波保存数组
   POS_2 mSikoAvg[AVG_SIZE+1];
   int32_t mTensionAvg[AVG_SIZE+1];
-  float magic_v[20];
-  VEL_2 magic_XYv[20];
+  float magic_v[AVG_SIZE+1];
+  VEL_2 magic_XYv[XYV_AVG_SIZE+1];
 
 
 ////////////上位机发送的控制命令数据////////////////////////////////

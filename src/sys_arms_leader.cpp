@@ -211,8 +211,6 @@ static void calSysDelayed(BASE::ReadLiftHzData  &mSysDelayed, BASE::SYS_TIME  mS
 ******************************************************************************/
 static void calibrationSensors(BASE::ARMS_THREAD_INFO *pTModule)
 {
-  //pTModule->mMagicControl.mM = readTensionValue(pTModule)/9.8;
-
   //计算算法运行初始值
   pTModule->mMagicControl.mJ = 1.5*pow((pTModule->mMagicControl.mL/2), 2.0);
   pTModule->mMagicControl.mK1 = pTModule->mConfParam->mConfSaveWeight * pTModule->mMagicControl.mL + pTModule->mMagicControl.mJ/pTModule->mMagicControl.mL;
@@ -221,11 +219,7 @@ static void calibrationSensors(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mMagicControl.mRopeEndLastL = {0,0};
 
   //初始化滤波数组
-  for (int i=0;i<20;i++)
-  {
-      pTModule->magic_XYv[i] = {0.0,0.0};
-  }
-  //memset((char*)&pTModule->magic_XYv, 0, sizeof(BASE::VEL_2)*20);
+  memset((char*)&pTModule->magic_XYv, 0, sizeof(BASE::VEL_2)*(XYV_AVG_SIZE+1));
 }
 
 /******************************************************************************
@@ -578,6 +572,9 @@ static int32_t initFire(BASE::ARMS_THREAD_INFO *pTModule)
 ******************************************************************************/
 static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
 {
+  if(pTModule->mCond.mMotorCmd != BASE::ST_ALL_RUN_RUNNING)
+    pTModule->mMagicRCnt = 0;
+
   //接收命令后执行命令中
   switch (pTModule->mCond.mMotorCmd)
   {
@@ -660,43 +657,46 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     //run mode
     case BASE::ST_ALL_RUN_RUNNING:
     {
-      if(*(pTModule->mIsRun) == 1)
+      if(*(pTModule->mIsRun) != 0)
       {
-          static int ii = 0;
-          ii++;
-          //memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
-          if(ii<10)
+          pTModule->mMagicRCnt++;
+          memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
+          if(pTModule->mMagicRCnt<10)
           {
-            //编码器找零值
+            //参数初始化
             calibrationSensors(pTModule);
           }
-
-          //TUDO PID ctrl move to (x y z)
-          //拉力控制算法
           //缓冲200个周期在启动控制算法
-          if(ii > 200)
+          if(pTModule->mMagicRCnt > 200)
           {
-            followagic(pTModule);
-            //pTModule->mMagicControl.mCmdV.v_p[0] = 0;
-            //pTModule->mMagicControl.mCmdV.v_p[1] = 0;
-            //pTModule->mMagicControl.mCmdV.v_p[2] = 0;
-            pullMagic(pTModule);//函数计算出收放收缩加速度。
-            ii = 600;
+            //根据上位机选择，运行那个算法
+            if(*(pTModule->mIsRun) == 1)
+            {
+                followagic(pTModule);
+                pullMagic(pTModule);//函数计算出收放收缩加速度。
+            }else if (*(pTModule->mIsRun) == 2) {
+                followagic(pTModule);
+            }else if (*(pTModule->mIsRun) == 3) {
+                pullMagic(pTModule);//函数计算出收放收缩加速度。
+            }
+
+            pTModule->mMagicRCnt = 600;
           }else
           {
             memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
+
+            memset((char*)&pTModule->mMagicControl.mRopeEndLastL, 0, sizeof(BASE::POS_2));
+            memset((char*)pTModule->magic_v, 0, sizeof(float)*(AVG_SIZE+1));
+            memset((char*)&pTModule->magic_XYv, 0, sizeof(BASE::VEL_2)*(XYV_AVG_SIZE+1));
+            pTModule->mMagicControl.last_dd_Lz = 0;
           }
 
-          //pTModule->mMagicControl.mCmdV.v_p[2] = 0;
           if((pTModule->mRCnt%8) == 0)
           LOGER::PrintfLog(BASE::S_APP_LOGER,"name:%s,ixv:%f iyv:%f izV:%f oxv:%f oyv:%f ozV:%f 兹山尺x:%f 兹山尺y:%f",
                            pTModule->mThreadName, pTModule->mMagicControl.mCmdV.v_p[0],  pTModule->mMagicControl.mCmdV.v_p[1],pTModule->mMagicControl.mCmdV.v_p[2],
                            pTModule->mRecUseMsg.mMotors[0].mSpeed,pTModule->mRecUseMsg.mMotors[1].mSpeed,pTModule->mRecUseMsg.mMotors[2].mSpeed,
                            pTModule->mRecUseMsg.mSiko1,pTModule->mRecUseMsg.mSiko2);
-
-          BASE::VEL_4 mCmdV = pTModule->mMagicControl.mCmdV;
-
-          motorMoveVXYZWCmd(pTModule, mCmdV);
+          motorMoveVXYZWCmd(pTModule, pTModule->mMagicControl.mCmdV);
       }else
       {
           motorAllStopCmd(pTModule);
@@ -718,7 +718,6 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
       if((pTModule->mRCnt%100) == 0)
         printf("run stop cmd....  send:%d , rec:%d\n", pTModule->mRandomCode, pTModule->mRecMsg.mRandomCode);
       //run模式停止的话自动退回conf模式
-
       break;
     }
     default:
@@ -1021,9 +1020,6 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //对外力进行估算
   float f_estimate = -pControl->mK1 * ddalfi_measure - mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
 
-
-
-
   float dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
                 0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
 
@@ -1045,7 +1041,7 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //电机的加速度
   float d_w = dd_Lz/pControl->mR * pControl->mNdecrease;
 
-  //if((pTModule->mRCnt%8) == 0)
+  if((pTModule->mRCnt%8) == 0)
   printf("%s,dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f alfa_now:%f  d_w:%f  f_re:%f %f %f\n",pTModule->mThreadName,
           dd_Lz, f_estimate, d_f_measure, d_alfi_measure, alfa_m, pControl->alfa_reco[0],d_w, pControl->F_reco[0], pControl->F_reco[1],pControl->F_reco[2]);
 
@@ -1163,41 +1159,7 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, float &mVel)
 {
   int32_t iRet = 0;
-  /*
-  //计算收放绳子电机要执行的速度，rad/s
-  float mNowV = pTModule->mRecUseMsg.mMotors[2].mSpeed;
-  //单位为 rad/s
-  mVel = pTModule->mMagicControl.d_w*pTModule->sysDt + mNowV;
 
-  //速度做均质滤波
-  for (int i=1; i<3;i++)
-  {
-    mVel += pTModule->magic_v[i];
-  }
-  mVel /= 3;
-
-  //限制速度
-  if(mVel > 50)
-      mVel = 50;
-  if(mVel < -50)
-      mVel = -50;
-
-  //存储之前速度
-  for (int i=9; i>=0; --i)
-  {
-    pTModule->magic_v[i] = pTModule->magic_v[i-1];
-  }
-  pTModule->magic_v[0] = mVel;
-
-  //检查机械臂是否有错
-  if(checkRecMsgError(pTModule) < 0)
-  {
-    printf("************* mVel:%f , error laliji\n", mVel);
-    //mVel.v[0] = 0;
-  }
-  //printf("************* mVel:%f > 31, error:%d d_w:%f mNowv: %f, d_w:%f, dt:%f \n", mVel.v[0], checkRecMsgError(pTModule),pTModule->mMagicControl.d_w,  mNowV,
-  //                        pTModule->mMagicControl.d_w, pTModule->mMagicControl.dt);
-  */
     return iRet;
 }
 ////////////////////////////////////////////////////////////////////////////////

@@ -88,7 +88,6 @@ void ThreadLinker::handleRecDatagrams(BASE::MArmsUpData &mMsg)
         case BASE::CMD_ACK_READ_CYC :{
             BASE::ARMS_R_USE_MSG *pShow = (BASE::ARMS_R_USE_MSG *)malloc(sizeof(BASE::ARMS_R_USE_MSG)*SYS_ARMS_MAX_SIZE);
             memcpy((char*)pShow, mMsg.Datas, sizeof(BASE::ARMS_R_USE_MSG)*SYS_ARMS_MAX_SIZE);
-//qDebug()<<"cyc read";
             sendDataTowind(BASE::MSG_NOTICE_ACK_CYC, 0, (char*)pShow);
             break;
         }
@@ -160,7 +159,6 @@ void ThreadLinker::sendControlCmd(const uint16_t mCmd, const char* pData, const 
         memcpy(mMsg.Datas, pData, pDataSize);
 
     udpReceiver->writeDatagram((char*)&mMsg, sizeof(mMsg), QHostAddress(mServerIp), mServerPort);
-    qDebug()<<mCmd<<"******";
 }
 
 /*****************************************************
@@ -263,7 +261,6 @@ int ThreadLinker::recSignalLiftHandMoveModule(BASE::LiftCmdData *pData)
     if(sysIsLinked)
         sendControlCmd(BASE::CMD_HAND_MOVE_START, (char*)pData, sizeof(BASE::LiftCmdData));
 
-    //qDebug() << pData->mMoveRelatAbs<< pData->mMudoleNum<< pData->mHandXMove<< pData->mHandYMove<< pData->mHandZMove<< pData->mHandWMove;
     return 0;
 }
 

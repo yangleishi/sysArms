@@ -163,10 +163,6 @@ void MainWindow::setUi()
 
 
         /*****************************运行界面控件初始化********************************/
-        mLabelsRun[i] = new QLabel(ui->tab3);
-        mLabelsRun[i]->setGeometry(BASE::LabelRunRect[i]);
-        mLabelsRun[i]->raise();
-        mLabelsRun[i]->setText(BASE::ModulesStrings[i]);
 
         mRunReadX[i] = new QLineEdit(ui->tab2);
         mRunReadX[i]->setGeometry(BASE::LineRunPosXRect[i]);
@@ -240,6 +236,11 @@ void MainWindow::initBase()
     mDrawP = new QProcess(this);
     m_sender = new  QUdpSocket();
     m_sender->bind(9998, QUdpSocket::ShareAddress);
+
+    //数据下传
+    m_MulticastSend = new QUdpSocket();
+    m_MulticastSend->bind(9998, QUdpSocket::ShareAddress);
+
     memset((char*)&mDrawDatas, 0, sizeof(mDrawDatas));
 }
 
@@ -255,7 +256,6 @@ void MainWindow::deInitBase()
     DELETE_P(mLinkIp);
     DELETE_P(mLinkPort);
 
-    qDebug()<<"1111111111111";
     for (int i = 0; i<SYS_ARMS_MAX_SIZE; ++i)
     {
 
@@ -274,7 +274,6 @@ void MainWindow::deInitBase()
         DELETE_P(mLiftHandWNow[i]);
         DELETE_P(mLiftCheckBoxs[i]);
 
-        DELETE_P(mLabelsRun[i]);
         DELETE_P(mRunReadX[i]);
         DELETE_P(mRunReadY[i]);
         DELETE_P(mRunReadZ[i]);
@@ -283,7 +282,6 @@ void MainWindow::deInitBase()
         DELETE_P(mRunReadPullE[i]);
     }
 
-qDebug()<<"22222222222222222";
     for (int j = 0; j < SHOW_DETAILS_MUD_MUNS; ++j)
     {
       DELETE_P(widShowCB[j]);
@@ -300,6 +298,12 @@ qDebug()<<"22222222222222222";
     {
         delete m_sender;
         m_sender = nullptr;
+    }
+
+    if(nullptr != m_MulticastSend)
+    {
+        delete m_MulticastSend;
+        m_MulticastSend = nullptr;
     }
 }
 
@@ -422,6 +426,7 @@ void MainWindow::recNoticeMessages(QVariant mNotice)
         case BASE::MSG_NOTICE_ACK_CYC :
         {
             showCycMessage((BASE::ARMS_R_USE_MSG *)mMsg.m_MsgPData);
+            //showRunMessage(mMsg.m_MsgPData);
             break;
         }
         case BASE::MSG_NOTICE_INIT_ALL_ACK :
@@ -898,7 +903,7 @@ void MainWindow::slotsButtonLiftAllPullStart()
             mPullData[i].mIsValid = 1;
             mPullData[i].mMudoleNum = i;
             mPullData[i].v_p[2] = ui->liftS_all_pull->text().toFloat();
-            qDebug()<<i<<"===============";
+
         }
     }
     //将整体pull移动数据发送给linker线程，
@@ -950,7 +955,7 @@ void MainWindow::slotsButtonRunStart()
     {
       if(mRunCheckBoxs[i]->isChecked())
       {
-          mRunMask[i] = 1;
+          mRunMask[i] = ui->chose_magicT->currentIndex() + 1;
       }
     }
 
@@ -1422,6 +1427,10 @@ void MainWindow::showConfMessage(BASE::ConfData *pShowMsg)
 ***********************************************************************************/
 void MainWindow::showCycMessage(BASE::ARMS_R_USE_MSG *pShowMsg)
 {
+    BASE::ARMS_MULTICAST_UDP mMulticatMsg = {0};
+    static int32_t randD = 0;
+    mMulticatMsg.mIdentifier = 0;
+    mMulticatMsg.mRandomCode = randD++;
     for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
     {
         mConfReadPull[i]->setText(QString("%1").arg(pShowMsg[i].mTension/0.0098));
@@ -1436,7 +1445,18 @@ void MainWindow::showCycMessage(BASE::ARMS_R_USE_MSG *pShowMsg)
         mLiftHandZNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[2].mSpeed));
         mLiftHandWNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[3].mSpeed));
         mESwitch[i]->setText(QString("%1").arg(pShowMsg[i].mSwitchStateCode));
+
+        mRunReadX[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[0].mPosition));
+        mRunReadY[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[1].mPosition));
+        mRunReadZ[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[2].mPosition));
+
+        //多播数据传输
+        mMulticatMsg.mMark[i] = 1;
+        mMulticatMsg.mTension[i] = (int32_t)(pShowMsg[i].mTension/0.0098);
     }
+
+    //多播传输
+    m_MulticastSend->writeDatagram((char*)&mMulticatMsg, sizeof(mMulticatMsg), QHostAddress("192.168.1.201"), 10001);
 }
 
 

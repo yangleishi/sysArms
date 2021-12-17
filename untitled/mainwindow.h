@@ -178,7 +178,6 @@ private:
     QComboBox *mLiftHandCheckBoxModule;
 
 /*****************************运行界面控件*************************************/
-    QLabel *mLabelsRun[SYS_ARMS_MAX_SIZE];
     QLineEdit *mRunReadX[SYS_ARMS_MAX_SIZE];
     QLineEdit *mRunReadY[SYS_ARMS_MAX_SIZE];
     QLineEdit *mRunReadZ[SYS_ARMS_MAX_SIZE];
@@ -197,6 +196,7 @@ private:
     //比如磁栅尺要显示在哪个曲线上
     //int  show1CBindex[SHOW_DETAILS_MUD_MUNS];
     QUdpSocket *m_sender;//, *m_rec;
+    QUdpSocket *m_MulticastSend;//, *m_rec;
 
     BASE::ConfData mConfPa[SYS_ARMS_MAX_SIZE];
 
