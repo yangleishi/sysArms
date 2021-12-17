@@ -64,11 +64,6 @@ static int motorAllStopCmd(BASE::ARMS_THREAD_INFO *pTModule);
 
 static int motorCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::MOTORS &mMotors);
 
-//static BASE::ACC_2 pidGetDa(BASE::POS_2 mNowL, BASE::POS_2 mLastL, float dT);
-static BASE::POS_2 getPosBaseAngle(BASE::ANGLE_2 mNowAngle, float ropeL);
-static BASE::ANGLE_2 getEndPosBySikoXY(float mSikoX, float mSikoY, float mRope, float mSRope);
-
-
 static float readTensionValue(BASE::ARMS_THREAD_INFO *pTModule);
 
 //app running
@@ -82,7 +77,9 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule);
 static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule);
 static float   deadZone(float mIndead, float mthr);
 
-static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, float &mVel);
+//
+static int32_t runningPhase(BASE::ARMS_THREAD_INFO *pTModule);
+static int32_t calibPhase(BASE::ARMS_THREAD_INFO *pTModule);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////internal interface //////////////////////////////////////////////////////
@@ -615,37 +612,7 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     }
     case BASE::ST_ALL_CALBRATE:
     {
-      //pull 命令，根据拉立计信息慢慢的增加电机转速。
-      float  tensiosKg = readTensionValue(pTModule)/9.8;
-      float  cmdKg  =  pTModule->mIntCmd.mCalibKg;
-      float  encoderD = pTModule->mRecUseMsg.mEncoderTurns*57.29578;
-      printf("%s calibrate %f %f %f\n",pTModule->mThreadName,tensiosKg,cmdKg,encoderD);
-      //p d自标定算法
-      float kp = 5.0;
-      float kD = 10.0;
-      BASE::VEL_4 mCmdV = {0};
-
-      //编码器和卷扬机不能同时标定
-      if(fabs((tensiosKg-cmdKg))>0.1)
-      {
-        mCmdV.v_p[2] = kp*(tensiosKg-cmdKg);
-      }
-      else {
-        if(fabs(encoderD)>0.5)
-          mCmdV.v_p[3] = -kp*encoderD;
-      }
-
-      if(mCmdV.v_p[2]>50)
-          mCmdV.v_p[2] = 50;
-      if(mCmdV.v_p[2]<-50)
-          mCmdV.v_p[2] = -50;
-
-      if(mCmdV.v_p[3]>50)
-          mCmdV.v_p[3] = 50;
-      if(mCmdV.v_p[3]<-50)
-          mCmdV.v_p[3] = -50;
-
-      motorMoveVXYZWCmd(pTModule, mCmdV);
+      calibPhase(pTModule);
       break;
     }
     case BASE::ST_LIFT_STOPED:
@@ -657,59 +624,7 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     //run mode
     case BASE::ST_ALL_RUN_RUNNING:
     {
-      if(*(pTModule->mIsRun) != 0)
-      {
-          pTModule->mMagicRCnt++;
-          memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
-          if(pTModule->mMagicRCnt<10)
-          {
-            //参数初始化
-            calibrationSensors(pTModule);
-          }
-          //缓冲200个周期在启动控制算法
-          if(pTModule->mMagicRCnt > 200)
-          {
-            //根据上位机选择，运行那个算法
-            if(*(pTModule->mIsRun) == 1)
-            {
-                followagic(pTModule);
-                pullMagic(pTModule);//函数计算出收放收缩加速度。
-            }else if (*(pTModule->mIsRun) == 2) {
-                followagic(pTModule);
-            }else if (*(pTModule->mIsRun) == 3) {
-                pullMagic(pTModule);//函数计算出收放收缩加速度。
-            }
-
-            pTModule->mMagicRCnt = 600;
-          }else
-          {
-            memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
-
-            memset((char*)&pTModule->mMagicControl.mRopeEndLastL, 0, sizeof(BASE::POS_2));
-            memset((char*)pTModule->magic_v, 0, sizeof(float)*(AVG_SIZE+1));
-            memset((char*)&pTModule->magic_XYv, 0, sizeof(BASE::VEL_2)*(XYV_AVG_SIZE+1));
-            pTModule->mMagicControl.last_dd_Lz = 0;
-          }
-
-          if((pTModule->mRCnt%8) == 0)
-          LOGER::PrintfLog(BASE::S_APP_LOGER,"name:%s,ixv:%f iyv:%f izV:%f oxv:%f oyv:%f ozV:%f 兹山尺x:%f 兹山尺y:%f",
-                           pTModule->mThreadName, pTModule->mMagicControl.mCmdV.v_p[0],  pTModule->mMagicControl.mCmdV.v_p[1],pTModule->mMagicControl.mCmdV.v_p[2],
-                           pTModule->mRecUseMsg.mMotors[0].mSpeed,pTModule->mRecUseMsg.mMotors[1].mSpeed,pTModule->mRecUseMsg.mMotors[2].mSpeed,
-                           pTModule->mRecUseMsg.mSiko1,pTModule->mRecUseMsg.mSiko2);
-          motorMoveVXYZWCmd(pTModule, pTModule->mMagicControl.mCmdV);
-      }else
-      {
-          motorAllStopCmd(pTModule);
-      }
-
-      /*
-      LOGER::PrintfLog(BASE::S_ARMS_DATA, "%d %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f",
-                       ii,tCmdV, pTModule->mRecUseMsg.mSiko1, pTModule->mRecUseMsg.mSiko2, pTModule->mRecUseMsg.mInclinometer1_x, pTModule->mRecUseMsg.mInclinometer1_y,
-                       pTModule->mRecUseMsg.mEncoderTurns, pTModule->mRecUseMsg.mTension, pTModule->mRecUseMsg.mTension,
-                       pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[1].mSpeed, pTModule->mRecUseMsg.mMotors[2].mSpeed, pTModule->mRecUseMsg.mMotors[3].mSpeed,
-                       pTModule->mRecUseMsg.mMotors[0].mSpeed, tCmdV, pTModule->mRecUseMsg.mMotors[0].mSpeed, pTModule->mRecUseMsg.mMotors[0].mSpeed
-                       );
-      */
+      runningPhase(pTModule);
       break;
     }
     case BASE::ST_RUN_STOPED:
@@ -727,6 +642,104 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
     }
   }
 
+}
+
+/******************************************************************************
+* 功能：拉力弹簧、自标定算法phase
+* @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针
+* @return Descriptions
+******************************************************************************/
+static int32_t calibPhase(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  int32_t iRet = 0;
+  //pull 命令，根据拉立计信息慢慢的增加电机转速。
+  float  tensiosKg = readTensionValue(pTModule)/9.8;
+  float  cmdKg  =  pTModule->mIntCmd.mCalibKg;
+  float  encoderD = pTModule->mRecUseMsg.mEncoderTurns*57.29578;
+  printf("%s calibrate %f %f %f\n",pTModule->mThreadName,tensiosKg,cmdKg,encoderD);
+  //p d自标定算法
+  float kp = 5.0;
+  float kD = 10.0;
+  BASE::VEL_4 mCmdV = {0};
+
+  //编码器和卷扬机不能同时标定
+  if(fabs((tensiosKg-cmdKg))>0.1)
+  {
+    mCmdV.v_p[2] = kp*(tensiosKg-cmdKg);
+  }
+  else {
+    if(fabs(encoderD)>0.5)
+      mCmdV.v_p[3] = -kp*encoderD;
+  }
+
+  if(mCmdV.v_p[2]>50)
+      mCmdV.v_p[2] = 50;
+  if(mCmdV.v_p[2]<-50)
+      mCmdV.v_p[2] = -50;
+
+  if(mCmdV.v_p[3]>50)
+      mCmdV.v_p[3] = 50;
+  if(mCmdV.v_p[3]<-50)
+      mCmdV.v_p[3] = -50;
+
+  motorMoveVXYZWCmd(pTModule, mCmdV);
+  return iRet;
+}
+
+/******************************************************************************
+* 功能：算法运行phase
+* @param pTModule : pTModule是线程信息结构体，存储有拉力计结构体指针
+* @return Descriptions
+******************************************************************************/
+static int32_t runningPhase(BASE::ARMS_THREAD_INFO *pTModule)
+{
+  int32_t iRet = 0;
+  if(*(pTModule->mIsRun) != 0)
+  {
+    pTModule->mMagicRCnt++;
+    memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
+    if(pTModule->mMagicRCnt<10)
+    {
+      //参数初始化
+      calibrationSensors(pTModule);
+    }
+    //缓冲200个周期在启动控制算法
+    if(pTModule->mMagicRCnt > 200)
+    {
+      //根据上位机选择，运行那个算法
+      if(*(pTModule->mIsRun) == 1)
+      {
+          followagic(pTModule);
+          pullMagic(pTModule);//函数计算出收放收缩加速度。
+      }else if (*(pTModule->mIsRun) == 2) {
+          followagic(pTModule);
+      }else if (*(pTModule->mIsRun) == 3) {
+          pullMagic(pTModule);//函数计算出收放收缩加速度。
+      }
+
+      pTModule->mMagicRCnt = 600;
+    }else
+    {
+      memset((char*)&pTModule->mMagicControl.mCmdV, 0, sizeof(BASE::VEL_4));
+
+      memset((char*)&pTModule->mMagicControl.mRopeEndLastL, 0, sizeof(BASE::POS_2));
+      memset((char*)pTModule->magic_v, 0, sizeof(float)*(AVG_SIZE+1));
+      memset((char*)&pTModule->magic_XYv, 0, sizeof(BASE::VEL_2)*(XYV_AVG_SIZE+1));
+      pTModule->mMagicControl.last_dd_Lz = 0;
+    }
+
+    if((pTModule->mRCnt%8) == 0)
+      LOGER::PrintfLog(BASE::S_APP_LOGER,"name:%s,ixv:%f iyv:%f izV:%f oxv:%f oyv:%f ozV:%f 兹山尺x:%f 兹山尺y:%f",
+                       pTModule->mThreadName, pTModule->mMagicControl.mCmdV.v_p[0],  pTModule->mMagicControl.mCmdV.v_p[1],pTModule->mMagicControl.mCmdV.v_p[2],
+                       pTModule->mRecUseMsg.mMotors[0].mSpeed,pTModule->mRecUseMsg.mMotors[1].mSpeed,pTModule->mRecUseMsg.mMotors[2].mSpeed,
+                       pTModule->mRecUseMsg.mSiko1,pTModule->mRecUseMsg.mSiko2);
+    motorMoveVXYZWCmd(pTModule, pTModule->mMagicControl.mCmdV);
+  }else
+  {
+    motorAllStopCmd(pTModule);
+  }
+
+  return  iRet;
 }
 
 /******************************************************************************
@@ -860,29 +873,6 @@ static uint16_t copyArmsRunDatas(BASE::ARMS_R_USE_MSG mRecUseMsg, BASE::ReadRunA
 
   mRunDatas.runD_RencoderT = mRecUseMsg.mEncoderTurns;
 }
-
-/******************************************************************************
-* 功能：根据摆动角度，绳索长度得到位置
-* @param mNowAngle : mNowAngle是绳索X Y方向角度，单位弧度
-* @param ropeL : ropeL是绳索的长度单位m
-* @return Descriptions
-******************************************************************************/
-static BASE::POS_2 getPosBaseAngle(BASE::ANGLE_2 mNowAngle, float ropeL)
-{
-    BASE::POS_2 iRet = {0,0};
-    iRet.x = ropeL*sin(mNowAngle.x);
-    iRet.y = ropeL*sin(mNowAngle.y);
-    return iRet;
-}
-
-static BASE::ANGLE_2 getEndPosBySikoXY(float mSikoX, float mSikoY, float mRope, float mSRope)
-{
-    BASE::POS_2 iRet = {0,0};
-    iRet.x = mSikoX * (mRope/mSRope);
-    iRet.y = mSikoY * (mRope/mSRope);
-    return iRet;
-}
-
 
 /******************************************************************************
 * 功能：机械臂在运行模式下周期调用的函数，包含系统检测，控制命令发送，运动数据拷贝等
@@ -1096,7 +1086,6 @@ static float deadZone(float mIndead, float mthr)
 static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 {
   //需要根据磁栅尺计算当前XY偏角
-  //pTModule->mMagicControl.mRopeEndL = getEndPosBySikoXY(pTModule->mRecUseMsg.mSiko1, pTModule->mRecUseMsg.mSiko2, 3.0, 0.5);
   BASE::POS_2  mRopeEndL;
   float kp = pTModule->mConfParam->mFollowKp;
   float kd = pTModule->mConfParam->mFollowKd;
@@ -1156,12 +1145,7 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   return 0;
 }
 
-static int32_t getV(BASE::ARMS_THREAD_INFO *pTModule, float &mVel)
-{
-  int32_t iRet = 0;
 
-    return iRet;
-}
 ////////////////////////////////////////////////////////////////////////////////
 ///////external interface //////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
