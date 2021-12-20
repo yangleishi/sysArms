@@ -235,6 +235,9 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   //拉力计除以100，变成g
   pTModule->mRecMsg.mTension /= 100;
 
+  //拉力计zuo jiaozhun
+  pTModule->mRecMsg.mTension += pTModule->mConfParam->mConfTension;
+
   //pTModule->mRecMsg.mTension = 40000;
   //printf("拉力计:%d\n",pTModule->mRecMsg.mTension);
   int32_t mTempTension = pTModule->mRecMsg.mTension;
@@ -346,6 +349,7 @@ static int packageFrame(BASE::ARMS_S_MSG* pMsg,  BASE::MOTORS &mMotors, uint16_t
   return iRet;
 }
 
+#if 0
 /******************************************************************************
 * 功能：机械臂控制函数，发送控制指令。只控制XYZ轴运动，没有控制拉力电机
 * @param pMsg : pTModule是线程信息结构体指针，里边存储的线程运行期间用到的数据和交换通信数据
@@ -389,6 +393,8 @@ static int motorMoveVXYZCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 mVel)
     iRet = motorCmd(pTModule, mMotors);
     return  iRet;
 }
+
+
 static int motorMoveVXYCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 mVel)
 {
     int32_t iRet = 0;
@@ -410,7 +416,7 @@ static int motorMoveVWCmd(BASE::ARMS_THREAD_INFO *pTModule, float mVel)
 {
     return  motorMoveICmd(pTModule, mVel, BASE::CT_MOTOR_MOVE_POSITIVE, MOTOR_W);
 }
-
+#endif
 static int motorMoveVZCmd(BASE::ARMS_THREAD_INFO *pTModule, float mVel)
 {
     return  motorMoveICmd(pTModule, mVel, BASE::CT_MOTOR_MOVE_POSITIVE, MOTOR_Z);
@@ -737,6 +743,7 @@ static int32_t runningPhase(BASE::ARMS_THREAD_INFO *pTModule)
   }else
   {
     motorAllStopCmd(pTModule);
+    pTModule->mMagicRCnt = 0;
   }
 
   return  iRet;
@@ -1031,7 +1038,7 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //电机的加速度
   float d_w = dd_Lz/pControl->mR * pControl->mNdecrease;
 
-  if((pTModule->mRCnt%8) == 0)
+  if((pTModule->mRCnt%15) == 0)
   printf("%s,dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f alfa_now:%f  d_w:%f  f_re:%f %f %f\n",pTModule->mThreadName,
           dd_Lz, f_estimate, d_f_measure, d_alfi_measure, alfa_m, pControl->alfa_reco[0],d_w, pControl->F_reco[0], pControl->F_reco[1],pControl->F_reco[2]);
 
@@ -1197,8 +1204,8 @@ void* threadEntry(void* pModule)
 
     if(size != sizeof(BASE::ARMS_R_MSG))
     {
-      sprintf(printfError,"no client link, or size < rec msg\n");
-      LOGER::PrintfLog(BASE::S_APP_LOGER, "state: %s, no client link, or size < rec msg", pTModule->mThreadName);
+      sprintf(printfError,"%s no client link, or size < rec msg\n",pTModule->mThreadName);
+      //LOGER::PrintfLog(BASE::S_APP_LOGER, "state: %s, no client link, or size < rec msg", pTModule->mThreadName);
       //只有在conf 或者 run 模式下超时才转换到stop模式
       if((pTModule->mState == BASE::M_STATE_CONF) || (pTModule->mState == BASE::M_STATE_RUN))
         pTModule->mState = BASE::M_STATE_STOP;
@@ -1254,7 +1261,8 @@ void* threadEntry(void* pModule)
       case BASE::M_STATE_STOP:
       {
         motorAllStopCmd(pTModule);
-        printf(printfError);
+        if((pTModule->mRCnt%100) == 0)
+          printf(printfError);
         break;
       }
       case BASE::M_STATE_QUIT:

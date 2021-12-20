@@ -576,6 +576,9 @@ typedef struct{
   float mWn;
   float mCo;
 
+  //laliji
+  float mConfTension;
+
   int   mIsValid;
 } ConfData;
 
