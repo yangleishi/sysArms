@@ -353,13 +353,20 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mCpuAffinity  = CONF::CPU_LEAD;
     mArmsModule[qIdx-1].mIsNowMotorCmd = 0;
     mArmsModule[qIdx-1].mIsRun = &(mIsRun[qIdx-1]);
+
+    mArmsModule[qIdx-1].mPoxR = CONF::LEADER_MOTOR_POS_R[qIdx-1];
+    mArmsModule[qIdx-1].mPoxTx = CONF::LEADER_MOTOR_POS_Tx[qIdx-1];
+    mArmsModule[qIdx-1].mPoxTy = CONF::LEADER_MOTOR_POS_Ty[qIdx-1];
+
+    for (int motor=0;motor<4;motor++)
+      mArmsModule[qIdx-1].motorDirection[motor] = CONF::LEADER_MOTOR_DIRECTION[qIdx-1][motor];
+
     gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_NAME[qIdx],
                                                  LEADER::threadEntry,
                                                  CONF::PRI_LEAD,
                                                  &(mArmsModule[qIdx-1]));
     usleep(10000);
   }
-
 
   // arms threads初始化机械臂控制算法参数
   for (qIdx = CONF::ARMS_M_SUPR_ID + 1; qIdx < DEF_SYS_USE_ARMS_NUMS+1; qIdx++)

@@ -38,7 +38,7 @@
 //慈善尺滤波尺寸
 #define AVG_SIZE    (9)
 
-#define XYV_AVG_SIZE    (3)
+#define XYV_AVG_SIZE    (1)
 
 namespace BASE {
 
@@ -761,6 +761,9 @@ typedef struct: public THREAD_INFO_HEADER
   pthread_mutex_t mArmsMsgMutex;
   pthread_cond_t  mArmsMsgReady;
 
+  //motor fangxiang
+  int motorDirection[4];
+
   //rec motor cmd
   int                mIsNowMotorCmd;
   LiftCmdData      mMoveData;
@@ -790,13 +793,19 @@ typedef struct: public THREAD_INFO_HEADER
   int32_t mTensionAvg[AVG_SIZE+1];
   float magic_v[AVG_SIZE+1];
   VEL_2 magic_XYv[XYV_AVG_SIZE+1];
+  float magic_Encoder[AVG_SIZE+1];
 
+  float magic_d_alfi[AVG_SIZE+1];
+  float magic_f_estime[AVG_SIZE+1];
 
 ////////////上位机发送的控制命令数据////////////////////////////////
   BASE::IntCmdData  mIntCmd;
   int *mIsRun;
   //随即码
   uint16_t   mRandomCode;
+
+  float      mPoxR,mPoxTx,mPoxTy;
+
 } ARMS_THREAD_INFO;
 
 //拉力计线程信息 tensions thread info

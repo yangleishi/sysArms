@@ -106,12 +106,22 @@ const int  MN_SERVER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 8001, 8002, 8003,
                                                      8007, 8008};
 const int  MN_PEER_PORT[DEF_SYS_MAX_ARMS_NUMS + 1] = { 8889, 8889, 8889,
                                                      8889, 8889, 8889,
-                                                     8889, 8889};
+                                                     8889, 8889}; 
 
 const int  MN_TENSION_SERVER_PORT[DEF_SYS_MAX_TENSIONLEADER_NUMS] = {9001, 9002};
 
 const char MN_INTERACTION_SERVER_IP[] = "192.168.1.100";
 const int  MN_INTERACTION_SERVER_PORT = 10001;
+
+//motor
+const int  LEADER_MOTOR_DIRECTION[][4] = {{1,1,-1,1},
+                                          {1,1,-1,1},
+                                          {-1,-1,-1,1},
+                                          {-1,-1,-1,1}};
+
+const float  LEADER_MOTOR_POS_R[4] = {1,1,-1,-1};
+const float  LEADER_MOTOR_POS_Tx[4] = {1376.22,1320.50,-1313.35,-1028.59};
+const float  LEADER_MOTOR_POS_Ty[4] = {1409.92,1132.37,-1185.47,-1374.36};
 
 //log日志保存的几个文件路径
 const char MN_INTERACTION_CONF_FILE[] = ".armsConf.conf";

@@ -226,12 +226,15 @@ static void calibrationSensors(BASE::ARMS_THREAD_INFO *pTModule)
 ******************************************************************************/
 static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
 {
-
   //编码器重整,
   if(pTModule->mRecMsg.mEncoderTurns > DEF_SYS_ENCODER_MAX)
     pTModule->mRecMsg.mEncoderTurns -= 360000;
   pTModule->mRecMsg.mEncoderTurns -= pTModule->mConfParam->mConfSaveEncoderT*1000.0;
 
+  /*
+  if(strcmp(pTModule->mThreadName, "MN_SERVER2") == 0)
+  printf("**********%s encoder:%d\n",pTModule->mThreadName,pTModule->mRecMsg.mEncoderTurns);
+  */
   //拉力计除以100，变成g
   pTModule->mRecMsg.mTension /= 100;
 
@@ -249,27 +252,49 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
     //printf("mTempTens**********:%d\n",mTempTension);
   }
   pTModule->mTensionAvg[AVG_SIZE] = pTModule->mRecMsg.mTension;
-  mTempTension /= (AVG_SIZE+1);
+  mTempTension /= (AVG_SIZE+1.0);
 
   //printf("mTempTens:%d\n",mTempTension);
   //数据转换成浮点型
   for (int i=0; i<4; ++i)
   {
-    pTModule->mRecUseMsg.mMotors[i].mSpeed = ((float)pTModule->mRecMsg.mMotors[findMotorNum(i)].mSpeed)*0.01745;
+    //
+    pTModule->mRecUseMsg.mMotors[i].mSpeed = ((float)pTModule->mRecMsg.mMotors[findMotorNum(i)].mSpeed)*0.01745*pTModule->motorDirection[i];
     //TUDU
-    pTModule->mRecUseMsg.mMotors[i].mPosition = ((float)((pTModule->mRecMsg.mMotors[findMotorNum(i)].mPosition%1000000)/100));
+    pTModule->mRecUseMsg.mMotors[i].mPosition = ((float)((pTModule->mRecMsg.mMotors[findMotorNum(i)].mPosition)/1000));
+    pTModule->mRecUseMsg.mMotors[i].mPosition /= 1000.0;
   }
-  /*
-  printf("************pos:%d %d %d %d\n",pTModule->mRecMsg.mMotors[0].mPosition/10000,pTModule->mRecMsg.mMotors[1].mPosition/10000,
-                                         pTModule->mRecMsg.mMotors[2].mPosition/10000,pTModule->mRecMsg.mMotors[3].mPosition/10000);
-  */
+
+  //X Y pos
+  pTModule->mRecUseMsg.mMotors[0].mPosition = pTModule->mPoxR*pTModule->mRecUseMsg.mMotors[0].mPosition - pTModule->mPoxTx;
+  pTModule->mRecUseMsg.mMotors[1].mPosition = pTModule->mPoxR*pTModule->mRecUseMsg.mMotors[1].mPosition - pTModule->mPoxTy;
+
+
+  //printf("************pos:%d %d %d %d\n",pTModule->mRecMsg.mMotors[0].mPosition/10000,pTModule->mRecMsg.mMotors[1].mPosition/10000,
+  //                                       pTModule->mRecMsg.mMotors[2].mPosition/10000,pTModule->mRecMsg.mMotors[3].mPosition/10000);
+
   //限位开关
   pTModule->mRecUseMsg.mSwitchStateCode = pTModule->mRecMsg.mSwitchStateCode;
   pTModule->mRecUseMsg.mSwitchTiggers = pTModule->mRecMsg.mSwitchTiggers;
 
   //编码器转换成国际单位
-  pTModule->mRecUseMsg.mEncoderTurns = ((float)pTModule->mRecMsg.mEncoderTurns)*0.00001745;
+  float tEncoderTurns = ((float)pTModule->mRecMsg.mEncoderTurns)*0.00001745;
+  pTModule->mRecUseMsg.mEncoderTurns = tEncoderTurns;
   pTModule->mRecUseMsg.mTension      = ((float)mTempTension) * 0.0098;
+
+  //encoder avg
+  for (int i=0; i<AVG_SIZE; i++)
+  {
+    pTModule->magic_Encoder[i] = pTModule->magic_Encoder[i+1];
+    pTModule->mRecUseMsg.mEncoderTurns += pTModule->magic_Encoder[i];
+  }
+  pTModule->magic_Encoder[AVG_SIZE] = tEncoderTurns;
+  pTModule->mRecUseMsg.mEncoderTurns /= (AVG_SIZE+1.0);
+
+
+  //ci shan chi zhuanhuan juedui
+  pTModule->mRecMsg.mSiko1 *= pTModule->motorDirection[0];
+  pTModule->mRecMsg.mSiko2 *= pTModule->motorDirection[1];
 
   //m单位
   pTModule->mRecUseMsg.mSiko1       = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoX*0.001;
@@ -419,7 +444,7 @@ static int motorMoveVWCmd(BASE::ARMS_THREAD_INFO *pTModule, float mVel)
 #endif
 static int motorMoveVZCmd(BASE::ARMS_THREAD_INFO *pTModule, float mVel)
 {
-    return  motorMoveICmd(pTModule, mVel, BASE::CT_MOTOR_MOVE_POSITIVE, MOTOR_Z);
+    return  motorMoveICmd(pTModule, mVel*pTModule->motorDirection[2], BASE::CT_MOTOR_MOVE_POSITIVE, MOTOR_Z);
 }
 
 //只控制Z W电机
@@ -461,7 +486,7 @@ static int motorMoveVXYZWCmd(BASE::ARMS_THREAD_INFO *pTModule, BASE::VEL_4 mVel)
     for (int i=0; i<4; ++i)
     {
       mMotors.mMotorsCmd[i].mCmd = BASE::CT_MOTOR_MOVE_POSITIVE;
-      mMotors.mMotorsCmd[findMotorNum(i)].mSpeed = (int32_t)(mVel.v_p[i]*DEF_SYS_RADIAN_TO_PULSE);
+      mMotors.mMotorsCmd[findMotorNum(i)].mSpeed = ((int32_t)(mVel.v_p[i]*DEF_SYS_RADIAN_TO_PULSE))*(pTModule->motorDirection[i]);
     }
 
     //printf("V:%f %f %f %f v:%d %d %d %d\n",mVel.v_p[0], mVel.v_p[1],mVel.v_p[2],mVel.v_p[3],
@@ -604,9 +629,9 @@ static int32_t confCondFire(BASE::ARMS_THREAD_INFO *pTModule)
       {
         //TUDO 正转  倒转
         if(tensiosKg > cmdKg)
-            motorMoveVZCmd(pTModule, 2);
-        else
             motorMoveVZCmd(pTModule, -2);
+        else
+            motorMoveVZCmd(pTModule, 2);
          //printf("conf motor all pull move:set tension %f, now tension:%f, state:%d\n",  pTModule->mIntCmd.mCmdTension, tensiosKg, pTModule->mIsNowMotorCmd);
       }
       else
@@ -669,9 +694,9 @@ static int32_t calibPhase(BASE::ARMS_THREAD_INFO *pTModule)
   BASE::VEL_4 mCmdV = {0};
 
   //编码器和卷扬机不能同时标定
-  if(fabs((tensiosKg-cmdKg))>0.1)
+  if(fabs((tensiosKg-cmdKg))>0.06)
   {
-    mCmdV.v_p[2] = kp*(tensiosKg-cmdKg);
+    mCmdV.v_p[2] = kp*(cmdKg - tensiosKg);
   }
   else {
     if(fabs(encoderD)>0.5)
@@ -730,13 +755,18 @@ static int32_t runningPhase(BASE::ARMS_THREAD_INFO *pTModule)
 
       memset((char*)&pTModule->mMagicControl.mRopeEndLastL, 0, sizeof(BASE::POS_2));
       memset((char*)pTModule->magic_v, 0, sizeof(float)*(AVG_SIZE+1));
+      memset((char*)pTModule->magic_Encoder, 0, sizeof(float)*(AVG_SIZE+1));
+      memset((char*)pTModule->magic_d_alfi, 0, sizeof(float)*(AVG_SIZE+1));
+      memset((char*)pTModule->magic_f_estime, 0, sizeof(float)*(AVG_SIZE+1));
+
       memset((char*)&pTModule->magic_XYv, 0, sizeof(BASE::VEL_2)*(XYV_AVG_SIZE+1));
       pTModule->mMagicControl.last_dd_Lz = 0;
     }
 
     if((pTModule->mRCnt%8) == 0)
       LOGER::PrintfLog(BASE::S_APP_LOGER,"name:%s,ixv:%f iyv:%f izV:%f oxv:%f oyv:%f ozV:%f 兹山尺x:%f 兹山尺y:%f",
-                       pTModule->mThreadName, pTModule->mMagicControl.mCmdV.v_p[0],  pTModule->mMagicControl.mCmdV.v_p[1],pTModule->mMagicControl.mCmdV.v_p[2],
+                       pTModule->mThreadName, pTModule->mMagicControl.mCmdV.v_p[0]*pTModule->motorDirection[0],
+                       pTModule->mMagicControl.mCmdV.v_p[1]*pTModule->motorDirection[1],pTModule->mMagicControl.mCmdV.v_p[2]*pTModule->motorDirection[2],
                        pTModule->mRecUseMsg.mMotors[0].mSpeed,pTModule->mRecUseMsg.mMotors[1].mSpeed,pTModule->mRecUseMsg.mMotors[2].mSpeed,
                        pTModule->mRecUseMsg.mSiko1,pTModule->mRecUseMsg.mSiko2);
     motorMoveVXYZWCmd(pTModule, pTModule->mMagicControl.mCmdV);
@@ -1002,29 +1032,58 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
 
   //printf("***********alfa value:%f\n",);
 
-  float d_alfi_measure = (pControl->alfa_reco[0] - pControl->alfa_reco[1])/pTModule->sysDt;
+  float d_alfi_measure_t = (pControl->alfa_reco[0] - pControl->alfa_reco[1])/pTModule->sysDt;
+  float d_alfi_measure = d_alfi_measure_t;
+  //d alfi_measure  avg
+  //拉力计滤波
+  for (int i=0; i<AVG_SIZE; i++)
+  {
+    pTModule->magic_d_alfi[i] = pTModule->magic_d_alfi[i+1];
+    d_alfi_measure += pTModule->magic_d_alfi[i];
+  }
+  pTModule->magic_d_alfi[AVG_SIZE] = d_alfi_measure_t;
+  d_alfi_measure /= (AVG_SIZE+1.0);
+
+
   float ddalfi_measure = (pControl->alfa_reco[0] - 2*pControl->alfa_reco[1] + pControl->alfa_reco[2])/(pTModule->sysDt*pTModule->sysDt);
+  //float ddalfi_measure = (d_alfi_measure - pTModule->magic_d_alfi[AVG_SIZE-1])/(pTModule->sysDt);
 
   //printf("************* ddalfi_measure:%f alfa_reco:%f %f %f\n",
   //                       pControl->ddalfi_measure, pControl->alfa_reco[0], pControl->alfa_reco[1], pControl->alfa_reco[2]);
 
-  float alfa_m = deadZone(pControl->alfa_reco[0], 0.03);
+  float alfa_m = deadZone(pControl->alfa_reco[0], 0.0005);
   //float alfa_m = pControl->alfa_reco[0];
   //if(fabs(alfa_m) < 1.5/60)
   //{
   //  alfa_m = 0;
   //}
   //对外力进行估算
-  float f_estimate = -pControl->mK1 * ddalfi_measure - mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
+  float f_estimate_t = -pControl->mK1 * ddalfi_measure - mM*pControl->last_dd_Lz - pControl->mK*pControl->mL*alfa_m;
+  float f_estimate = f_estimate_t;
+  //d alfi_measure  avg
+  //拉力计滤波
+  for (int i=0; i<AVG_SIZE; i++)
+  {
+    pTModule->magic_f_estime[i] = pTModule->magic_f_estime[i+1];
+    f_estimate += pTModule->magic_f_estime[i];
+  }
+  pTModule->magic_f_estime[AVG_SIZE] = f_estimate_t;
+  f_estimate /= (AVG_SIZE+1.0);
 
-  float dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
+
+
+  /**********************************/
+  //float dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
+  //              0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
+
+  float dd_Lz = (-f_estimate + 0.0*d_f_measure)/mM  +
                 0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
-
 
   //printf("mK1:%f mM:%f last_dd_Lz:%f mK:%f  mL:%f\n",
   //        pControl->mK1, pControl->mM, pControl->last_dd_Lz, pControl->mK, pControl->mL);
 
   //pControl->dd_Lz = (-pControl->f_estimate + (pControl->F_reco[0]-pControl->mM*pControl->mG)*2 + 0.4*pControl->d_f_measure)/pControl->mM;
+  dd_Lz = -dd_Lz;
 
   //加速度限制超过1
   if(dd_Lz > 3)
@@ -1038,15 +1097,23 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //电机的加速度
   float d_w = dd_Lz/pControl->mR * pControl->mNdecrease;
 
-  if((pTModule->mRCnt%15) == 0)
-  printf("%s,dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f alfa_now:%f  d_w:%f  f_re:%f %f %f\n",pTModule->mThreadName,
+
+  printf("**********encoder:%f,%d\n",pTModule->mMagicControl.alfa_reco[0],pTModule->mRecMsg.mEncoderTurns);
+
+  if((pTModule->mRCnt%1) == 0)
+  printf("*****%s,dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f alfa_now:%f  d_w:%f  f_re:%f %f %f\n",pTModule->mThreadName,
           dd_Lz, f_estimate, d_f_measure, d_alfi_measure, alfa_m, pControl->alfa_reco[0],d_w, pControl->F_reco[0], pControl->F_reco[1],pControl->F_reco[2]);
 
   //根据加速度，计算要控制电机的速度
   //计算收放绳子电机要执行的速度，rad/s
   //单位为 rad/s
+  //float mjubuZSpeed = pTModule->mRecUseMsg.mMotors[2].mSpeed;
   float mVel = d_w*pTModule->sysDt + pTModule->mRecUseMsg.mMotors[2].mSpeed;
   float mTempVel = mVel;
+
+  printf("**********d_w:%f, sysDt:%f, cmd:%f, mMotorsSpeed:%f\n",d_w, pTModule->sysDt, mVel,pTModule->mRecUseMsg.mMotors[2].mSpeed);
+
+  /*
   //存储之前速度
   for (int i=0; i<AVG_SIZE; ++i)
   {
@@ -1055,7 +1122,7 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   }
   pTModule->magic_v[AVG_SIZE] = mVel;
   mTempVel /= (AVG_SIZE+1.0);
-
+  */
   //限制速度
   if(mTempVel > 80)
       mTempVel = 80;
@@ -1065,7 +1132,7 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   //检查机械臂是否有错
   if(checkRecMsgError(pTModule) < 0)
   {
-    printf("************* mVel:%f , error laliji\n", mTempVel);
+    //printf("************* mVel:%f , error laliji\n", mTempVel);
     //mVel.v[0] = 0;
   }
 
@@ -1101,8 +1168,8 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   //mRopeEndL.x = pTModule->mRecUseMsg.mSiko1 * (3.0/0.5);
   //mRopeEndL.y = pTModule->mRecUseMsg.mSiko2 * (3.0/0.5);
   //x y轴设置死区间
-  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.002);
-  mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.002);
+  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0025);
+  mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.0025);
 
 
   BASE::ACC_2 mAcc;
