@@ -46,6 +46,7 @@ typedef struct _MODULEINFOS
 BASE::ARMS_THREAD_INFO mArmsModule[DEF_SYS_USE_ARMS_NUMS];
 BASE::TENSIONS_THREAD_INFO mArmsTension[DEF_SYS_MAX_TENSIONLEADER_NUMS];
 BASE::LOG_THREAD_INFO  mlogsModule;
+static bool mArmsCross = false;
 
 //上位机界面中初始标定传感器参数，一份保存在文件中，供leader使用
 BASE::ConfData     mCalibParam[DEF_SYS_USE_ARMS_NUMS];
@@ -469,18 +470,12 @@ static void checkArmsWorking()
 static void handleArmsCrossing()
 {
   //check all arms rec msg
-  //TODU*******  calculation and check arms are crossing
-  /*
-  if(checkArmsCross()<0)
+  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
   {
-    for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
-    {
-      pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
-      mArmsModule[i].mIsNowMotorCmd = BASE::CMD_RUN_STOP;
-      pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
-    }
+    pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+    mArmsModule[i].mIsNowMotorCmd = BASE::CMD_RUN_STOP;
+    pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
   }
-  */
 
   //set all arms rec msg false.until nest msg come
   for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
@@ -702,6 +697,11 @@ static int32_t checkArmsCross(void)
   int32_t iRet = 0;
   float xy[2] = {0};
   float xyT[2] = {0};
+  mArmsCross = false;
+  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; ++i)
+  {
+    mArmsModule[i].mRecUseMsg.mOverLap = 0;
+  }
 
   for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; ++i)
   {
@@ -714,8 +714,12 @@ static int32_t checkArmsCross(void)
 
       float dertX = (xy[0]-xyT[0])*(xy[0]-xyT[0]);
       float dertY = (xy[1]-xyT[1])*(xy[1]-xyT[1]);
-      if(sqrt(dertX+dertY)<0.03)
-        return -1;
+      if(sqrt(dertX+dertY)<0.45)
+      {
+        mArmsModule[i].mRecUseMsg.mOverLap = 1;
+        mArmsModule[j].mRecUseMsg.mOverLap = 1;
+        mArmsCross = true;
+      }
     }
   }
   return iRet;
@@ -755,8 +759,10 @@ static int32_t suprMainLoop(){
     if(mSysState == BASE::M_STATE_CONF || mSysState == BASE::M_STATE_RUN || mSysState == BASE::M_STATE_STOP)
       handleInteractionCmd();
 
+
+    checkArmsCross();
     // check arms  whether  crossed
-    if(mSysState == BASE::M_STATE_RUN)
+    if((mSysState == BASE::M_STATE_RUN) && (mArmsCross == true))
       handleArmsCrossing();
 
     //test save app arms data log

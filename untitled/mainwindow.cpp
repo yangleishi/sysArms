@@ -180,6 +180,13 @@ void MainWindow::setUi()
         mRunReadZ[i]->setEnabled(false);
         mRunReadZ[i]->setText("0");
 
+        mRunReadOverLap[i] = new QLineEdit(ui->tab2);
+        mRunReadOverLap[i]->setGeometry(BASE::LineRunOverLap[i]);
+        mRunReadOverLap[i]->raise();
+        mRunReadOverLap[i]->setEnabled(false);
+        mRunReadOverLap[i]->setText("0");
+
+
         mRunReadAngleX[i] = new QLineEdit(ui->tab2);
         mRunReadAngleX[i]->setGeometry(BASE::LineRunErrorAngleXRect[i]);
         mRunReadAngleX[i]->raise();
@@ -239,9 +246,19 @@ void MainWindow::initBase()
 
     //数据下传
     m_MulticastSend = new QUdpSocket();
-    m_MulticastSend->bind(9998, QUdpSocket::ShareAddress);
+    m_MulticastSend->bind(9997, QUdpSocket::ShareAddress);
+    //MulticastLoopbackOption
+
+    //m_MulticastSend->joinMulticastGroup(QHostAddress("224.0.0.88"));
+
+    connect(m_MulticastSend, SIGNAL(readyRead()), this, SLOT(readData502()));
+    mMulticastIp = "192.168.1.208";
+    mMulticastPort = 7777;
 
     memset((char*)&mDrawDatas, 0, sizeof(mDrawDatas));
+
+    //
+    initHanging();
 }
 
 /*****************************************************
@@ -277,6 +294,8 @@ void MainWindow::deInitBase()
         DELETE_P(mRunReadX[i]);
         DELETE_P(mRunReadY[i]);
         DELETE_P(mRunReadZ[i]);
+        DELETE_P(mRunReadOverLap[i]);
+
         DELETE_P(mRunReadAngleX[i]);
         DELETE_P(mRunReadAngleY[i]);
         DELETE_P(mRunReadPullE[i]);
@@ -305,6 +324,10 @@ void MainWindow::deInitBase()
         delete m_MulticastSend;
         m_MulticastSend = nullptr;
     }
+
+    //
+    deInitHanging();
+
 }
 
 
@@ -372,8 +395,6 @@ void MainWindow::handleLinkAck(int mValue)
         ui->pb_unlink->setEnabled(true);
 
         ui->liftPB_allM_start->setEnabled(true);
-        ui->liftPB_allP_start->setEnabled(true);
-
         //读取一次配置
         sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RCONF, 0, 0);
     }
@@ -624,13 +645,14 @@ void MainWindow::signalsSlotsConnects()
     connect(mLiftHandCheckBoxModule, SIGNAL(currentIndexChanged(int)), this, SLOT(liftModuleChanged(int)));
     connect(ui->liftPB_allM_start, SIGNAL(clicked()), this, SLOT(slotsButtonLiftAllMoveStart()), Qt::QueuedConnection);
     connect(ui->liftPB_allM_stop, SIGNAL(clicked()), this, SLOT(slotsButtonLiftAllMoveStop()), Qt::QueuedConnection);
-    connect(ui->liftPB_allP_start, SIGNAL(clicked()), this, SLOT(slotsButtonLiftAllPullStart()), Qt::QueuedConnection);
-    connect(ui->liftPB_allP_stop, SIGNAL(clicked()), this, SLOT(slotsButtonLiftAllPullStop()), Qt::QueuedConnection);
+    //connect(ui->liftPB_allP_start, SIGNAL(clicked()), this, SLOT(slotsButtonLiftAllPullStart()), Qt::QueuedConnection);
 
     //正常运行界面按钮做的动作
     connect(ui->runR_start, SIGNAL(clicked()), this, SLOT(slotsButtonRunStart()), Qt::QueuedConnection);
     connect(ui->runR_stop, SIGNAL(clicked()), this, SLOT(slotsButtonRunStop()), Qt::QueuedConnection);
     connect(ui->runR_Estop, SIGNAL(clicked()), this, SLOT(slotsButtonRunEStop()), Qt::QueuedConnection);
+
+    connect(ui->pb_multicast_set, SIGNAL(clicked()), this, SLOT(slotsButtonMulticastSet()), Qt::QueuedConnection);
 
     //显示细节界面
     connect(ui->detail_pb_show, SIGNAL(clicked()), this, SLOT(slotsButtonDetailShow()), Qt::QueuedConnection);
@@ -645,6 +667,13 @@ void MainWindow::signalsSlotsConnects()
     //notice msg connect
     connect(m_ThreadLinker, &ThreadLinker::signalNoticeToWind, this, &MainWindow::recNoticeMessages,Qt::QueuedConnection);
     connect(this, &MainWindow::signalNoticeToLinker, m_ThreadLinker, &ThreadLinker::recNoticeMessages,Qt::QueuedConnection);
+
+    //拉力机校准
+    connect(ui->pb_calibrate_tension, SIGNAL(clicked()), this, SLOT(slotsButtonCalibrateTension()), Qt::QueuedConnection);
+
+
+
+    connect(ui->pb_auto_send, SIGNAL(clicked()), this, SLOT(slotsButtonAutoHangingSend()), Qt::QueuedConnection);
 }
 
 MainWindow::~MainWindow()
@@ -827,6 +856,30 @@ void MainWindow::slotsButtonLiftAllMoveStart()
             mMoveData[i].v_p[1] = ui->liftS_all_moveY->text().toFloat();
             mMoveData[i].v_p[2] = ui->liftS_all_moveZ->text().toFloat();
             mMoveData[i].v_p[3] = ui->liftS_all_moveW->text().toFloat();
+            //检查是否超过100
+            for(int j=0; j<4; j++)
+            {
+              if(mMoveData[i].v_p[0]>150)
+                  mMoveData[i].v_p[0] = 150;
+              if(mMoveData[i].v_p[0]<-150)
+                  mMoveData[i].v_p[0] = -150;
+
+              if(mMoveData[i].v_p[1]>150)
+                  mMoveData[i].v_p[1] = 150;
+              if(mMoveData[i].v_p[1]<-150)
+                  mMoveData[i].v_p[1] = -150;
+
+              if(mMoveData[i].v_p[2]>150)
+                  mMoveData[i].v_p[2] = 150;
+              if(mMoveData[i].v_p[2]<-150)
+                  mMoveData[i].v_p[2] = -150;
+
+              if(mMoveData[i].v_p[3]>150)
+                  mMoveData[i].v_p[3] = 150;
+              if(mMoveData[i].v_p[3]<-150)
+                  mMoveData[i].v_p[3] = -150;
+
+            }
             mMoveData[i].isVelOrPos = 1;
 
         }
@@ -834,7 +887,7 @@ void MainWindow::slotsButtonLiftAllMoveStart()
     //将手动移动数据发送给linker线程，
     sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_ALL_MOVE, 0, (char*)mMoveData);
     //设置按钮有效，无效
-    ui->liftPB_allP_start->setEnabled(false);
+    //ui->liftPB_allP_start->setEnabled(false);
 
     ui->liftPB_allM_stop->setEnabled(true);
 
@@ -856,7 +909,7 @@ void MainWindow::slotsButtonLiftAllMoveStop()
     //将手动停止发送给linker线程，
     sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_ALL_MOVE_STOP, 0, 0);
     //设置按钮有效，无效
-    ui->liftPB_allP_start->setEnabled(true);
+    //ui->liftPB_allP_start->setEnabled(true);
     ui->liftPB_allM_start->setEnabled(true);
     ui->liftPB_allM_stop->setEnabled(false);
 
@@ -869,6 +922,11 @@ void MainWindow::slotsButtonLiftAllMoveStop()
     ui->liftS_all_moveY->setText("0");
     ui->liftS_all_moveZ->setText("0");
     ui->liftS_all_moveW->setText("0");
+    //
+    for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
+    {
+      mLiftCheckBoxs[i]->setChecked(false);
+    }
 }
 
 /**********************************************************
@@ -878,6 +936,7 @@ void MainWindow::slotsButtonLiftAllMoveStop()
 * 描述：
 *     起吊按钮拉力全部开始槽函数
 ***********************************************************/
+/*
 void MainWindow::slotsButtonLiftAllPullStart()
 {
     //检查是否选择了要移动的模块单元
@@ -918,28 +977,7 @@ void MainWindow::slotsButtonLiftAllPullStart()
 
     ui->runR_start->setEnabled(false);
 }
-
-/**********************************************************
-* @param : [in]
-* @return Descriptions
-* @exception Type1: Descriptions
-* 描述：
-*     起吊按钮拉力全部停止槽函数
-***********************************************************/
-void MainWindow::slotsButtonLiftAllPullStop()
-{
-    //将手动停止发送给linker线程，
-    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_ALL_PULL_STOP, 0, 0);
-    //设置按钮有效，无效
-    ui->liftPB_allP_start->setEnabled(true);
-    ui->liftPB_allM_start->setEnabled(true);
-    ui->liftPB_allP_stop->setEnabled(false);
-
-    ui->pb_read_conf->setEnabled(true);
-    ui->pb_save_conf->setEnabled(true);
-
-    ui->runR_start->setEnabled(true);
-}
+*/
 
 /**********************************************************
 * @param : [in]
@@ -961,7 +999,7 @@ void MainWindow::slotsButtonRunStart()
 
     sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RUN_START, 0, (char*)mRunMask);
     //设置按钮有效，无效
-    ui->liftPB_allP_start->setEnabled(false);
+    //ui->liftPB_allP_start->setEnabled(false);
 
     ui->pb_read_conf->setEnabled(false);
     ui->pb_save_conf->setEnabled(false);
@@ -985,7 +1023,7 @@ void MainWindow::slotsButtonRunStop()
 {
     sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RUN_STOP, 0, 0);
     //设置按钮有效，无效
-    ui->liftPB_allP_start->setEnabled(true);
+    //ui->liftPB_allP_start->setEnabled(true);
     ui->liftPB_allM_start->setEnabled(true);
     ui->pb_read_conf->setEnabled(true);
     ui->pb_save_conf->setEnabled(true);
@@ -1010,7 +1048,7 @@ void MainWindow::slotsButtonRunEStop()
     sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RUN_STOPE, 0, 0);
     //设置按钮有效，无效
     qDebug()<<"stop E";
-    ui->liftPB_allP_start->setEnabled(true);
+    //ui->liftPB_allP_start->setEnabled(true);
     ui->liftPB_allM_start->setEnabled(true);
     ui->pb_read_conf->setEnabled(true);
     ui->pb_save_conf->setEnabled(true);
@@ -1021,6 +1059,13 @@ void MainWindow::slotsButtonRunEStop()
     //ui->runR_stop->setEnabled(false);
     ui->runR_Estop->setEnabled(false);
     ui->detail_pb_show->setEnabled(false);
+}
+
+void MainWindow::slotsButtonMulticastSet()
+{
+   mMulticastIp = ui->line_multicast_ip->text();
+   mMulticastPort = ui->line_multicast_port->text().toUShort();
+   qDebug()<<mMulticastIp<<" "<<mMulticastPort;
 }
 
 /**********************************************************
@@ -1075,6 +1120,7 @@ void MainWindow::slotsButtonSaveConf()
             mModulesConfDatas[i].mFollowKd         = ui->conf_Kd->text().toFloat();
             mModulesConfDatas[i].mWn               = ui->conf_Wn->text().toFloat();
             mModulesConfDatas[i].mCo               = ui->conf_Co->text().toFloat();
+            mModulesConfDatas[i].mConfTension      = ui->Line_calibrat_tension->text().toFloat();
         }
     }
 
@@ -1111,6 +1157,40 @@ void MainWindow::slotsButtonCalibrate()
 }
 
 
+/**********************************************************
+* @param : [in]
+* @return Descriptions
+* @exception Type1: Descriptions
+* 描述：
+*     配置界面中保存配置槽函数
+***********************************************************/
+void MainWindow::slotsButtonCalibrateTension()
+{
+    BASE::ConfData *mModulesConfDatas = (BASE::ConfData *)malloc(sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    memset((char*)mModulesConfDatas, 0, sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    //将手动停止发送给linker线程，
+    for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
+    {
+        if(mLiftRadioButton[i]->isChecked())
+        {
+            mModulesConfDatas[i].mIsValid = 1;
+            mModulesConfDatas[i].mConfSaveWeight   = ui->conf_Weight->text().toFloat();
+            mModulesConfDatas[i].mConfSaveEncoderT = ui->conf_encoderT->text().toFloat();
+            mModulesConfDatas[i].mConfSaveSikoX    = ui->conf_sikoX->text().toFloat();
+            mModulesConfDatas[i].mConfSaveSikoY    = ui->conf_sikoY->text().toFloat();
+            mModulesConfDatas[i].mFollowKp         = ui->conf_Kp->text().toFloat();
+            mModulesConfDatas[i].mFollowKd         = ui->conf_Kd->text().toFloat();
+            mModulesConfDatas[i].mWn               = ui->conf_Wn->text().toFloat();
+            mModulesConfDatas[i].mCo               = ui->conf_Co->text().toFloat();
+            mModulesConfDatas[i].mConfTension      = ui->Line_calibrat_tension->text().toFloat();
+            mModulesConfDatas[i].mConfTension += (mModulesConfDatas[i].mConfSaveWeight*1000 - mConfReadPull[i]->text().toFloat());
+        }
+    }
+    //将配置数据发送给linker线程，
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_SCONF, 0, (char*)mModulesConfDatas);
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RCONF, 0, 0);
+}
+
 void MainWindow::slotsButtonCalibrateStop()
 {
     //将手动停止发送给linker线程，
@@ -1136,6 +1216,7 @@ void MainWindow::slotsButtonReSaveSiko()
             mModulesConfDatas[i].mFollowKd         = ui->conf_Kd->text().toFloat();
             mModulesConfDatas[i].mWn               = ui->conf_Wn->text().toFloat();
             mModulesConfDatas[i].mCo               = ui->conf_Co->text().toFloat();
+            mModulesConfDatas[i].mConfTension      = ui->Line_calibrat_tension->text().toFloat();
         }
     }
     //将配置数据发送给linker线程，
@@ -1415,6 +1496,8 @@ void MainWindow::showConfMessage(BASE::ConfData *pShowMsg)
             ui->conf_Kd->setText(QString("%1").arg(pShowMsg[i].mFollowKd));
             ui->conf_Wn->setText(QString("%1").arg(pShowMsg[i].mWn));
             ui->conf_Co->setText(QString("%1").arg(pShowMsg[i].mCo));
+            ui->Line_calibrat_tension->setText(QString("%1").arg(pShowMsg[i].mConfTension));
+            ui->calibrate_kg->setText(QString("%1").arg(pShowMsg[i].mConfSaveWeight));
         }
     }
 }
@@ -1428,37 +1511,62 @@ void MainWindow::showConfMessage(BASE::ConfData *pShowMsg)
 void MainWindow::showCycMessage(BASE::ARMS_R_USE_MSG *pShowMsg)
 {
     BASE::ARMS_MULTICAST_UDP mMulticatMsg = {0};
-    static int32_t randD = 0;
+    static int32_t randD = 0, showCnt = 0;
     mMulticatMsg.mIdentifier = 0;
     mMulticatMsg.mRandomCode = randD++;
+
+    showCnt++;
+
     for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
     {
-        mConfReadPull[i]->setText(QString("%1").arg(pShowMsg[i].mTension/0.0098));
-        mConfReadEncoderT[i]->setText(QString("%1").arg(pShowMsg[i].mEncoderTurns*57.29));
-        mConfReadSikoX[i]->setText(QString("%1").arg(pShowMsg[i].mSiko1*1000.0));
-        mConfReadSikoY[i]->setText(QString("%1").arg(pShowMsg[i].mSiko2*1000.0));
-        mConfReadLevelX[i]->setText(QString("%1").arg(pShowMsg[i].mInclinometer1_x));
-        mConfReadLevelY[i]->setText(QString("%1").arg(pShowMsg[i].mInclinometer1_x));
+        if((showCnt%2) == 0)
+        {
+            mConfReadPull[i]->setText(QString("%1").arg(pShowMsg[i].mTension/0.0098));
+            mConfReadEncoderT[i]->setText(QString("%1").arg(pShowMsg[i].mEncoderTurns*57.29));
+            mConfReadSikoX[i]->setText(QString("%1").arg(pShowMsg[i].mSiko1*1000.0));
+            mConfReadSikoY[i]->setText(QString("%1").arg(pShowMsg[i].mSiko2*1000.0));
+            mConfReadLevelX[i]->setText(QString("%1").arg(pShowMsg[i].mInclinometer1_x));
+            mConfReadLevelY[i]->setText(QString("%1").arg(pShowMsg[i].mInclinometer1_y));
 
-        mLiftHandXNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[0].mSpeed));
-        mLiftHandYNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[1].mSpeed));
-        mLiftHandZNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[2].mSpeed));
-        mLiftHandWNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[3].mSpeed));
-        mESwitch[i]->setText(QString("%1").arg(pShowMsg[i].mSwitchStateCode));
+            mLiftHandXNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[0].mSpeed));
+            mLiftHandYNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[1].mSpeed));
+            mLiftHandZNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[2].mSpeed));
+            mLiftHandWNow[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[3].mSpeed));
+            mESwitch[i]->setText(QString("%1").arg(pShowMsg[i].mSwitchStateCode));
 
-        mRunReadX[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[0].mPosition));
-        mRunReadY[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[1].mPosition));
-        mRunReadZ[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[2].mPosition));
+            mRunReadX[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[0].mPosition));
+            mRunReadY[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[1].mPosition));
+            mRunReadZ[i]->setText(QString("%1").arg(pShowMsg[i].mMotors[2].mPosition));
+            mRunReadOverLap[i]->setText(QString("%1").arg(pShowMsg[i].mOverLap));
+        }
 
         //多播数据传输
         mMulticatMsg.mMark[i] = 1;
         mMulticatMsg.mTension[i] = (int32_t)(pShowMsg[i].mTension/0.0098);
+        mMulticatMsg.mPosX[i] = pShowMsg[i].mMotors[0].mPosition*1000;
+        mMulticatMsg.mPosY[i] = pShowMsg[i].mMotors[1].mPosition*1000;
+        mMulticatMsg.mPosZ[i] = pShowMsg[i].mMotors[2].mPosition*1000;
     }
 
     //多播传输
-    m_MulticastSend->writeDatagram((char*)&mMulticatMsg, sizeof(mMulticatMsg), QHostAddress("192.168.1.201"), 10001);
+    m_MulticastSend->writeDatagram((char*)&mMulticatMsg, sizeof(mMulticatMsg), QHostAddress(mMulticastIp), mMulticastPort);
 }
 
+void MainWindow::readData502()
+{
+    BASE::ARMS_MULTICAST_UDP mMsg;
+    while(m_MulticastSend->hasPendingDatagrams())
+    {
+        memset((char*)&mMsg, 0, sizeof(BASE::ARMS_MULTICAST_UDP));
+        qint64 recSize =  m_MulticastSend->readDatagram((char*)&mMsg, sizeof(BASE::ARMS_MULTICAST_UDP));
+        if(recSize == sizeof(BASE::ARMS_MULTICAST_UDP))
+        {
+          qDebug()<<mMsg.mIdentifier<<"  "<<mMsg.mCmd;
+        }
+        qDebug()<<" rec multicast "<<recSize;
+    }
+    //qDebug()<<" rec multicast "<<;
+}
 
 /**********************************showLiftMessage**********************************
 * pShowMsg : [输入]显示信息的地址
@@ -1501,6 +1609,7 @@ void MainWindow::showRunMessage(char *pShowMsg)
 {
     BASE::ARMS_R_USE_MSG *showMsg = (BASE::ARMS_R_USE_MSG *)pShowMsg;
 
+    /*
     //显示运行界面数据
     for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
     {
@@ -1538,6 +1647,71 @@ void MainWindow::showRunMessage(char *pShowMsg)
         mDrawDatas.m_Notice = BASE::CMD_DRAW_FIRE;
         qDebug()<<"show run:"<<m_sender->writeDatagram((char*)&mDrawDatas, sizeof(mDrawDatas), QHostAddress::LocalHost, 9999);
     }
+    */
+}
+
+//auto hanging init
+void MainWindow::initHanging()
+{
+  udpReceiver = new QUdpSocket(this);
+  if(nullptr == udpReceiver)
+    qDebug() << "udp socket 创建失败!";
+
+  udpReceiver->bind(10999, QUdpSocket::ShareAddress);
+  connect(udpReceiver, SIGNAL(readyRead()), this, SLOT(readDataAutoHanging()));
+}
+void MainWindow::deInitHanging()
+{
+
+    if(nullptr != udpReceiver)
+    {
+        delete udpReceiver;
+        udpReceiver = nullptr;
+    }
+}
+
+/*****************************************************
+* @param  : [in]
+* @return Descriptions
+* @exception Type1: Descriptions
+* 描述：
+*    接收到机械臂控制器消息，UDP
+******************************************************/
+void MainWindow::readDataAutoHanging()
+{
+    BASE::AUTO_HANGING_MSG mMsg;
+    while(udpReceiver->hasPendingDatagrams())
+    {
+        memset((char*)&mMsg, 0, sizeof(BASE::AUTO_HANGING_MSG));
+        qint64 recSize =  udpReceiver->readDatagram((char*)&mMsg, sizeof(BASE::AUTO_HANGING_MSG));
+        if(recSize == sizeof(BASE::AUTO_HANGING_MSG))
+        {
+          ui->rec_sys_type->setText(QString("%1").arg(mMsg.mIdentifier));
+          ui->rec_msg_id->setText(QString("%1").arg(mMsg.mMsgId));
+          ui->rec_randomCode->setText(QString("%1").arg(mMsg.mRandCode));
+          ui->rec_statue_code->setText(QString("%1").arg(mMsg.mStatuesCode));
+          ui->rec_time->setText(QString("%1").arg(mMsg.mTimeS));
+          ui->rec_msg_size->setText(QString("%1").arg(mMsg.mDataSize));
+          ui->rec_msg_data->setText(QString("%1").arg(mMsg.mData[0]));
+          ui->rec_msg_crc->setText(QString("%1").arg(mMsg.mCrc));
+        }
+    }
 }
 
 
+void MainWindow::slotsButtonAutoHangingSend()
+{
+    static uint32_t mCnt = 0;
+    mCnt++;
+    BASE::AUTO_HANGING_MSG mMsg;
+    mMsg.mIdentifier = ui->hanging_sys_type->currentIndex();
+    mMsg.mMsgId  = ui->send_msg_id->text().toInt();
+    mMsg.mRandCode = mCnt;
+    mMsg.mStatuesCode = 0;
+    mMsg.mTimeS = mCnt;
+    mMsg.mTimeUs = mCnt;
+    mMsg.mDataSize = 400;
+    mMsg.mData[0] = 1;
+    mMsg.mCrc = 111;
+    udpReceiver->writeDatagram((char*)&mMsg, sizeof(mMsg), QHostAddress(ui->send_IP->text()), ui->send_Port->text().toUShort());
+}

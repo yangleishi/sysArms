@@ -21,7 +21,7 @@
 #include<complex>
 
 
-#define TIMER_TIMEOUT  (100)
+#define TIMER_TIMEOUT  (50)
 
 /*****************************************************
 * @param parent : [in]父窗体

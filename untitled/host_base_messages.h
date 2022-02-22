@@ -281,6 +281,7 @@ typedef struct
 
   float   mCmdSpeed[4];      //算法输入速度单位为:弧度/s
   float   mCmdPos[4];      //算法输入速度单位为:弧度/s
+  int32_t mOverLap;
 
   float    mTension;         //单位为g
 } ARMS_R_USE_MSG;
@@ -293,10 +294,22 @@ typedef struct
   //随机码
   uint32_t   mRandomCode;
 
+  //启停命令
+  uint32_t   mCmd;
+
+  //系统状态
+  uint32_t   mStatue;
+
   //数据有效标识,标识传输的数据是否有效
   int32_t    mMark[8];
   //8套机械臂拉力计
   int32_t    mTension[8];         //单位为g
+
+  //8 pos
+  int32_t    mPosX[8];
+  int32_t    mPosY[8];
+  int32_t    mPosZ[8];
+
   //需要哪些数据随后加
 
 } ARMS_MULTICAST_UDP;
@@ -341,6 +354,8 @@ typedef struct{
 
   float mWn;
   float mCo;
+
+  float mConfTension;
 
   int   mIsValid;
 } ConfData;
@@ -413,107 +428,110 @@ typedef  struct
 
 #pragma pack()
 
+
+//autohanging
+typedef struct
+{
+  //rec motors datas
+  uint32_t   mIdentifier;
+
+  int32_t   mMsgId;
+
+  uint32_t  mRandCode;
+
+  int32_t   mStatuesCode;
+
+  uint32_t  mTimeS;
+
+  uint32_t  mTimeUs;
+
+  uint32_t  mDataSize;
+
+  char      mData[400];
+
+  uint16_t  mCrc;
+
+} AUTO_HANGING_MSG;
+
+
 /********************************标签名字***************************/
 const QString labelConfStrings[9]={"选择单元","拉力设置(kg)","X向编码器","Y向编码器","Z向编码器","拉力平衡编码器","板转编码器","磁栅尺","水平仪"};
 const QRect   LabelConfRect[9] = {QRect(10, 10, 80, 20),QRect(120, 10, 100, 20),QRect(330, 10, 80, 20),
                                   QRect(530, 10, 80, 20),QRect(730, 10, 80, 20),QRect(900, 10, 120, 20),
                                   QRect(1120, 10, 80, 20),QRect(1340, 10, 80, 20),QRect(1540, 10, 80, 20)};
 
-const QString ModulesStrings[11]={"单元1","单元2","单元3","单元4","单元5","单元6","单元7","单元8","单元9","单元10","单元11"};
-const QRect   checkConfRect[11] = {QRect(10, 70, 91, 19),QRect(10, 120, 91, 19),QRect(10, 170, 91, 19),QRect(10, 220, 91, 19),
-                                  QRect(10, 270, 91, 19),QRect(10, 320, 91, 19),QRect(10, 370, 91, 19),QRect(10, 420, 91, 19),
-                                  QRect(10, 470, 91, 19),QRect(10, 520, 91, 19),QRect(10, 570, 91, 19)};
+const QString ModulesStrings[8]={"单元1","单元2","单元3","单元4","单元5","单元6","单元7","单元8"};
+const QRect   checkConfRect[8] = {QRect(10, 70, 91, 19),QRect(10, 120, 91, 19),QRect(10, 170, 91, 19),QRect(10, 220, 91, 19),
+                                  QRect(10, 270, 91, 19),QRect(10, 320, 91, 19),QRect(10, 370, 91, 19),QRect(10, 420, 91, 19)};
 
-
-const QRect LineConfReadPullRect[11] = {QRect(700, 70, 81, 21),QRect(700, 120, 81, 21),QRect(700, 170, 81, 21),QRect(700, 220, 81, 21),
-                                        QRect(700, 270, 81, 21),QRect(700, 320, 81, 21),QRect(700, 370, 81, 21),QRect(700, 420, 81, 21),
-                                        QRect(700, 470, 81, 21),QRect(700, 520, 81, 21),QRect(700, 570, 81, 21)};
-
-
-const QRect LineConfReadEncoderTRect[11] = {QRect(800, 70, 81, 21),QRect(800, 120, 81, 21),QRect(800, 170, 81, 21),QRect(800, 220, 81, 21),
-                                            QRect(800, 270, 81, 21),QRect(800, 320, 81, 21),QRect(800, 370, 81, 21),QRect(800, 420, 81, 21),
-                                            QRect(800, 470, 81, 21),QRect(800, 520, 81, 21),QRect(800, 570, 81, 21)};
-
-
-const QRect LineConfReadSikoXRect[11] = {QRect(100, 70, 61, 21),QRect(100, 120, 61, 21),QRect(100, 170, 61, 21),QRect(100, 220, 61, 21),
-                                          QRect(100, 270, 61, 21),QRect(100, 320, 61, 21),QRect(100, 370, 61, 21),QRect(100, 420, 61, 21),
-                                          QRect(100, 470, 61, 21),QRect(100, 520, 61, 21),QRect(100, 570, 61, 21)};
-const QRect LineConfReadSikoYRect[11] = {QRect(170, 70, 71, 21),QRect(170, 120, 71, 21),QRect(170, 170, 71, 21),QRect(170, 220, 71, 21),
-                                           QRect(170, 270, 71, 21),QRect(170, 320, 71, 21),QRect(170, 370, 71, 21),QRect(170, 420, 71, 21),
-                                           QRect(170, 470, 71, 21),QRect(170, 520, 71, 21),QRect(170, 570, 71, 21)};
-
-const QRect LineConfReadLevelXRect[11] = {QRect(920, 70, 81, 21),QRect(920, 120, 81, 21),QRect(920, 170, 81, 21),QRect(920, 220, 81, 21),
-                                         QRect(920, 270, 81, 21),QRect(920, 320, 81, 21),QRect(920, 370, 81, 21),QRect(920, 420, 81, 21),
-                                         QRect(920, 470, 81, 21),QRect(920, 520, 81, 21),QRect(920, 570, 81, 21)};
-const QRect LineConfReadLevelYRect[11] = {QRect(1020, 70, 81, 21),QRect(1020, 120, 81, 21),QRect(1020, 170, 81, 21),QRect(1020, 220, 81, 21),
-                                         QRect(1020, 270, 81, 21),QRect(1020, 320, 81, 21),QRect(1020, 370, 81, 21),QRect(1020, 420, 81, 21),
-                                         QRect(1020, 470, 81, 21),QRect(1020, 520, 81, 21),QRect(1020, 570, 81, 21)};
-
-
-const QRect   LiftRect[11] = {QRect(10, 70, 71, 19),QRect(10, 120, 71, 19),QRect(10, 170, 71, 19),QRect(10, 220, 71, 19),
-                              QRect(10, 270, 71, 19),QRect(10, 320, 71, 19),QRect(10, 370, 71, 19),QRect(10, 420, 71, 19),
-                              QRect(10, 470, 71, 19),QRect(10, 520, 71, 19),QRect(10, 570, 71, 19)};
+const QRect LineConfReadSikoXRect[8] = {QRect(80, 70, 61, 21),QRect(80, 120, 61, 21),QRect(80, 170, 61, 21),QRect(80, 220, 61, 21),
+                                          QRect(80, 270, 61, 21),QRect(80, 320, 61, 21),QRect(80, 370, 61, 21),QRect(80, 420, 61, 21)};
+const QRect LineConfReadSikoYRect[8] = {QRect(150, 70, 61, 21),QRect(150, 120, 61, 21),QRect(150, 170, 61, 21),QRect(150, 220, 61, 21),
+                                           QRect(150, 270, 61, 21),QRect(150, 320, 61, 21),QRect(150, 370, 61, 21),QRect(150, 420, 61, 21)};
 
 
 
-const QRect LineLiftReadHandXNowRect[11] = {QRect(300, 70, 71, 21),QRect(300, 120, 71, 21),QRect(300, 170, 71, 21),QRect(300, 220, 71, 21),
-                                            QRect(300, 270, 71, 21),QRect(300, 320, 71, 21),QRect(300, 370, 71, 21),QRect(300, 420, 71, 21),
-                                            QRect(300, 470, 71, 21),QRect(300, 520, 71, 21),QRect(300, 570, 71, 21)};
 
-const QRect LineLiftReadHandYNowRect[11] = {QRect(400, 70, 71, 21),QRect(400, 120, 71, 21),QRect(400, 170, 71, 21),QRect(400, 220, 71, 21),
-                                            QRect(400, 270, 71, 21),QRect(400, 320, 71, 21),QRect(400, 370, 71, 21),QRect(400, 420, 71, 21),
-                                            QRect(400, 470, 71, 21),QRect(400, 520, 71, 21),QRect(400, 570, 71, 21)};
-
-const QRect LineLiftReadHandZNowRect[11] = {QRect(500, 70, 71, 21),QRect(500, 120, 71, 21),QRect(500, 170, 71, 21),QRect(500, 220, 71, 21),
-                                            QRect(500, 270, 71, 21),QRect(500, 320, 71, 21),QRect(500, 370, 71, 21),QRect(500, 420, 71, 21),
-                                            QRect(500, 470, 71, 21),QRect(500, 520, 71, 21),QRect(500, 570, 71, 21)};
-
-const QRect LineLiftReadHandWNowRect[11] = {QRect(600, 70, 71, 21),QRect(600, 120, 71, 21),QRect(600, 170, 71, 21),QRect(600, 220, 71, 21),
-                                            QRect(600, 270, 71, 21),QRect(600, 320, 71, 21),QRect(600, 370, 71, 21),QRect(600, 420, 71, 21),
-                                            QRect(600, 470, 71, 21),QRect(600, 520, 71, 21),QRect(600, 570, 71, 21)};
-
-const QRect LiftAllCheckBoxRect[11] = {QRect(1060, 500, 71, 19),QRect(1130, 500, 71, 19),
-                                       QRect(1060, 550, 71, 19),QRect(1130, 550, 71, 19),
-                                       QRect(1060, 600, 71, 19),QRect(1130, 600, 71, 19),
-                                       QRect(1060, 650, 71, 19),QRect(1130, 650, 71, 19),
-                                       QRect(1560, 100, 71, 19),QRect(1640, 100, 71, 19),
-                                       QRect(1720, 100, 71, 19)};
+const QRect   LiftRect[8] = {QRect(10, 70, 71, 19),QRect(10, 120, 71, 19),QRect(10, 170, 71, 19),QRect(10, 220, 71, 19),
+                              QRect(10, 270, 71, 19),QRect(10, 320, 71, 19),QRect(10, 370, 71, 19),QRect(10, 420, 71, 19)};
 
 
-const QRect RunAllCheckBoxRect[11] = {QRect(1300, 500, 71, 19),QRect(1380, 500, 71, 19),QRect(1460, 500, 71, 19),QRect(1540, 500, 71, 19),
-                                       QRect(1300, 550, 71, 19),QRect(1380, 550, 71, 19),QRect(1460, 550, 71, 19),QRect(1540, 550, 71, 19),
+
+const QRect LineLiftReadHandXNowRect[8] = {QRect(250, 70, 71, 21),QRect(250, 120, 71, 21),QRect(250, 170, 71, 21),QRect(250, 220, 71, 21),
+                                            QRect(250, 270, 71, 21),QRect(250, 320, 71, 21),QRect(250, 370, 71, 21),QRect(250, 420, 71, 21)};
+
+const QRect LineLiftReadHandYNowRect[8] = {QRect(330, 70, 71, 21),QRect(330, 120, 71, 21),QRect(330, 170, 71, 21),QRect(330, 220, 71, 21),
+                                            QRect(330, 270, 71, 21),QRect(330, 320, 71, 21),QRect(330, 370, 71, 21),QRect(330, 420, 71, 21)};
+
+const QRect LineLiftReadHandZNowRect[8] = {QRect(420, 70, 71, 21),QRect(420, 120, 71, 21),QRect(420, 170, 71, 21),QRect(420, 220, 71, 21),
+                                            QRect(420, 270, 71, 21),QRect(420, 320, 71, 21),QRect(420, 370, 71, 21),QRect(420, 420, 71, 21)};
+
+const QRect LineLiftReadHandWNowRect[8] = {QRect(510, 70, 71, 21),QRect(510, 120, 71, 21),QRect(510, 170, 71, 21),QRect(510, 220, 71, 21),
+                                            QRect(510, 270, 71, 21),QRect(510, 320, 71, 21),QRect(510, 370, 71, 21),QRect(510, 420, 71, 21)};
+
+const QRect LineConfReadPullRect[8] = {QRect(600, 70, 71, 21),QRect(600, 120, 71, 21),QRect(600, 170, 71, 21),QRect(600, 220, 71, 21),
+                                        QRect(600, 270, 71, 21),QRect(600, 320, 71, 21),QRect(600, 370, 71, 21),QRect(600, 420, 71, 21)};
+
+const QRect LineConfReadEncoderTRect[8] = {QRect(690, 70, 71, 21),QRect(690, 120, 71, 21),QRect(690, 170, 71, 21),QRect(690, 220, 71, 21),
+                                            QRect(690, 270, 71, 21),QRect(690, 320, 71, 21),QRect(690, 370, 71, 21),QRect(690, 420, 71, 21)};
+
+const QRect LineConfReadLevelXRect[8] = {QRect(790, 70, 71, 21),QRect(790, 120, 71, 21),QRect(790, 170, 71, 21),QRect(790, 220, 71, 21),
+                                         QRect(790, 270, 71, 21),QRect(790, 320, 71, 21),QRect(790, 370, 71, 21),QRect(790, 420, 71, 21)};
+const QRect LineConfReadLevelYRect[8] = {QRect(870, 70, 71, 21),QRect(870, 120, 71, 21),QRect(870, 170, 71, 21),QRect(870, 220, 71, 21),
+                                         QRect(870, 270, 71, 21),QRect(870, 320, 71, 21),QRect(870, 370, 71, 21),QRect(870, 420, 71, 21)};
+
+const QRect LineRunPosXRect[8] = {QRect(990, 70, 71, 21),QRect(990, 120, 71, 21),QRect(990, 170, 71, 21),QRect(990, 220, 71, 21),
+                                   QRect(990, 270, 71, 21),QRect(990, 320, 71, 21),QRect(990, 370, 71, 21),QRect(990, 420, 71, 21)};
+const QRect LineRunPosYRect[8] = {QRect(1070, 70, 71, 21),QRect(1070, 120, 71, 21),QRect(1070, 170, 71, 21),QRect(1070, 220, 71, 21),
+                                   QRect(1070, 270, 71, 21),QRect(1070,320, 71, 21),QRect(1070, 370, 71, 21),QRect(1070, 420, 71, 21)};
+const QRect LineRunPosZRect[8] = {QRect(1150, 70, 71, 21),QRect(1150, 120, 71, 21),QRect(1150, 170, 71, 21),QRect(1150, 220, 71, 21),
+                                   QRect(1150, 270, 71, 21),QRect(1150, 320, 71, 21),QRect(1150, 370, 71, 21),QRect(1150, 420, 71, 21)};
+
+const QRect LineRunOverLap[8] = {QRect(1230, 70, 71, 21),QRect(1230, 120, 71, 21),QRect(1230, 170, 71, 21),QRect(1230, 220, 71, 21),
+                                   QRect(1230, 270, 71, 21),QRect(1230, 320, 71, 21),QRect(1230, 370, 71, 21),QRect(1230, 420, 71, 21)};
+
+
+const QRect LiftAllCheckBoxRect[8] = {QRect(1060, 500, 71, 19),QRect(1130, 500, 71, 19),QRect(1060, 550, 71, 19),QRect(1130, 550, 71, 19),
+                                       QRect(1060, 600, 71, 19),QRect(1130, 600, 71, 19),QRect(1060, 650, 71, 19),QRect(1130, 650, 71, 19)};
+
+const QRect LineRunErrorAngleXRect[8] = {QRect(1330, 70, 71, 21),QRect(1330, 120, 71, 21),QRect(1330, 170, 71, 21),QRect(1330, 220, 71, 21),
+                                          QRect(1330, 270, 71, 21),QRect(1330,320, 71, 21),QRect(1330, 370, 71, 21),QRect(1330, 420, 71, 21)};
+const QRect LineRunErrorAngleYRect[8] = {QRect(1410, 70, 71, 21),QRect(1410, 120, 71, 21),QRect(1410, 170, 71, 21),QRect(1410, 220, 71, 21),
+                                          QRect(1410, 270, 71, 21),QRect(1410, 320, 71, 21),QRect(1410, 370, 71, 21),QRect(1410, 420, 71, 21)};
+const QRect LineRunErrorPullRect[8] = {QRect(1490, 70, 71, 21),QRect(1490, 120, 71, 21),QRect(1490, 170, 71, 21),QRect(1490,220, 71, 21),
+                                        QRect(1490, 270, 71, 21),QRect(1490, 320, 71, 21),QRect(1490, 370, 71, 21),QRect(1490, 420, 71, 21)};
+
+
+
+const QRect RunAllCheckBoxRect[8] = {QRect(1400, 500, 71, 19),QRect(1480, 500, 71, 19),QRect(1560, 500, 71, 19),QRect(1640, 500, 71, 19),
+                                       QRect(1400, 550, 71, 19),QRect(1480, 550, 71, 19),QRect(1560, 550, 71, 19),QRect(1640, 550, 71, 19),
                                       };
 
+const QRect   switchRect[8] = {QRect(1580, 70, 50, 19),QRect(1580, 120, 50, 19),QRect(1580, 170, 50, 19),QRect(1580, 220, 50, 19),
+                              QRect(1580, 270, 50, 19),QRect(1580, 320, 50, 19),QRect(1580, 370, 50, 19),QRect(1580, 420, 50, 19)};
 
-
-const QRect LabelRunRect[11] = {QRect(20, 70, 41, 21),QRect(20, 120, 41, 21),QRect(20, 170, 41, 21),QRect(20, 220, 41, 21),
-                                QRect(20, 270, 41, 21),QRect(20, 320, 41, 21),QRect(20, 370, 41, 21),QRect(20, 420, 41, 21),
-                                QRect(20, 470, 41, 21),QRect(20, 520, 51, 21),QRect(20, 570, 51, 21)};
-
-
-const QRect LineRunPosXRect[11] = {QRect(1120, 70, 71, 21),QRect(1120, 120, 71, 21),QRect(1120, 170, 71, 21),QRect(1120, 220, 71, 21),
-                                   QRect(1120, 270, 71, 21),QRect(1120, 320, 71, 21),QRect(1120, 370, 71, 21),QRect(1120, 420, 71, 21),
-                                   QRect(1120, 470, 71, 21),QRect(1120, 520, 71, 21),QRect(1120, 570, 71, 21)};
-const QRect LineRunPosYRect[11] = {QRect(1200, 70, 71, 21),QRect(1200, 120, 71, 21),QRect(1200, 170, 71, 21),QRect(1200, 220, 71, 21),
-                                   QRect(1200, 270, 71, 21),QRect(1200,320, 71, 21),QRect(1200, 370, 71, 21),QRect(1200, 420, 71, 21),
-                                   QRect(1200, 470, 71, 21),QRect(1200, 520, 71, 21),QRect(1200, 570, 71, 21)};
-const QRect LineRunPosZRect[11] = {QRect(1280, 70, 71, 21),QRect(1280, 120, 71, 21),QRect(1280, 170, 71, 21),QRect(1280, 220, 71, 21),
-                                   QRect(1280, 270, 71, 21),QRect(1280, 320, 71, 21),QRect(1280, 370, 71, 21),QRect(1280, 420, 71, 21),
-                                   QRect(1280, 470, 71, 21),QRect(1280, 520, 71, 21),QRect(1280, 570, 71, 21)};
-
-const QRect LineRunErrorAngleXRect[11] = {QRect(1360, 70, 71, 21),QRect(1360, 120, 71, 21),QRect(1360, 170, 71, 21),QRect(1360, 220, 71, 21),
-                                          QRect(1360, 270, 71, 21),QRect(1360,320, 71, 21),QRect(1360, 370, 71, 21),QRect(1360, 420, 71, 21),
-                                          QRect(1360, 470, 71, 21),QRect(1360, 520, 71, 21),QRect(1360, 570, 71, 21)};
-const QRect LineRunErrorAngleYRect[11] = {QRect(1440, 70, 71, 21),QRect(1440, 120, 71, 21),QRect(1440, 170, 71, 21),QRect(1440, 220, 71, 21),
-                                          QRect(1440, 270, 71, 21),QRect(1440, 320, 71, 21),QRect(1440, 370, 71, 21),QRect(1440, 420, 71, 21),
-                                          QRect(1440, 470, 71, 21),QRect(1440, 520, 71, 21),QRect(1440, 570, 71, 21)};
-const QRect LineRunErrorPullRect[11] = {QRect(1520, 70, 71, 21),QRect(1520, 120, 71, 21),QRect(1520, 170, 71, 21),QRect(1520,220, 71, 21),
-                                        QRect(1520, 270, 71, 21),QRect(1520, 320, 71, 21),QRect(1520, 370, 71, 21),QRect(1520, 420, 71, 21),
-                                        QRect(1520, 470, 71, 21),QRect(1520, 520, 71, 21),QRect(1520, 570, 71, 21)};
-
-const QRect   switchRect[11] = {QRect(1610, 70, 50, 19),QRect(1610, 120, 50, 19),QRect(1610, 170, 50, 19),QRect(1610, 220, 50, 19),
-                              QRect(1610, 270, 50, 19),QRect(1610, 320, 50, 19),QRect(1610, 370, 50, 19),QRect(1610, 420, 50, 19),
-                              QRect(1610, 470, 50, 19),QRect(1610, 520, 50, 19),QRect(1610, 570, 50, 19)};
+const QRect LabelRunRect[8] = {QRect(20, 70, 41, 21),QRect(20, 120, 41, 21),QRect(20, 170, 41, 21),QRect(20, 220, 41, 21),
+                                QRect(20, 270, 41, 21),QRect(20, 320, 41, 21),QRect(20, 370, 41, 21),QRect(20, 420, 41, 21)};
 
 
 const QString labelDetailStrings[10]={"磁栅尺X","磁栅尺Y","水平仪","拉力计","X速度","Y速度","Z速度","W位置","编码器转角","其他"};

@@ -64,8 +64,7 @@ public slots:
    void slotsButtonLiftHandStop();
    void slotsButtonLiftAllMoveStart();
    void slotsButtonLiftAllMoveStop();
-   void slotsButtonLiftAllPullStart();
-   void slotsButtonLiftAllPullStop();
+   //void slotsButtonLiftAllPullStart();
 
    //运行界面中时候，此函数被触发
    void slotsButtonRunStart();
@@ -73,6 +72,7 @@ public slots:
    void slotsButtonRunEStop();
    void detailModuleChanged(int index);
 
+     void slotsButtonMulticastSet();
 
    //数据回放中时候，此函数被触发
    void slotsButtonRunPlayStart();
@@ -89,6 +89,7 @@ public slots:
    void slotsButtonCalibrate();
    void slotsButtonCalibrateStop();
    void slotsButtonReSaveSiko();
+   void slotsButtonCalibrateTension();
 
    //显示界面细节1-3点击显示绘曲线，此函数被触发
    void slotsButtonDetailShow();
@@ -101,6 +102,10 @@ public slots:
    void slotsButtonConf();
    void slotsButtonRunning();
    void slotsButtonStop();
+   //auto hanging
+   void readDataAutoHanging();
+   void readData502();
+   void slotsButtonAutoHangingSend();
 private :
    void handleLinkAck(int mValue);
    void handleUnLinkAck(int mValue);
@@ -181,6 +186,8 @@ private:
     QLineEdit *mRunReadX[SYS_ARMS_MAX_SIZE];
     QLineEdit *mRunReadY[SYS_ARMS_MAX_SIZE];
     QLineEdit *mRunReadZ[SYS_ARMS_MAX_SIZE];
+    QLineEdit *mRunReadOverLap[SYS_ARMS_MAX_SIZE];
+
     QLineEdit *mRunReadAngleX[SYS_ARMS_MAX_SIZE];
     QLineEdit *mRunReadAngleY[SYS_ARMS_MAX_SIZE];
     QLineEdit *mRunReadPullE[SYS_ARMS_MAX_SIZE];
@@ -197,8 +204,19 @@ private:
     //int  show1CBindex[SHOW_DETAILS_MUD_MUNS];
     QUdpSocket *m_sender;//, *m_rec;
     QUdpSocket *m_MulticastSend;//, *m_rec;
+    QString  mMulticastIp;
+    quint16  mMulticastPort;
+    //QUdpSocket *m_MulticastSend;//, *m_rec;
 
     BASE::ConfData mConfPa[SYS_ARMS_MAX_SIZE];
+
+    //测试挂弹车
+    void initHanging();
+    void deInitHanging();
+    QUdpSocket * udpReceiver;
+    char recData[1000];
+    QString  mServerIp;
+    quint16  mServerPort;
 
 /****************************************UI中所有控件*********************************/
 private:

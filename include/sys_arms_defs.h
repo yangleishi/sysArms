@@ -429,6 +429,7 @@ typedef struct
 
   float   mCmdSpeed[4];      //算法输入速度单位为:弧度/s
   float   mCmdPos[4];      //算法输入速度单位为:弧度/s
+  int32_t mOverLap;
 
   float    mTension;         //单位为g
 } ARMS_R_USE_MSG;
@@ -804,6 +805,7 @@ typedef struct: public THREAD_INFO_HEADER
   //随即码
   uint16_t   mRandomCode;
 
+  //
   float      mPoxR,mPoxTx,mPoxTy;
 
 } ARMS_THREAD_INFO;
