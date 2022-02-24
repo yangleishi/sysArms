@@ -1073,11 +1073,11 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
 
 
   /**********************************/
-  //float dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
-  //              0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
-
-  float dd_Lz = (-f_estimate + 0.0*d_f_measure)/mM  +
+  float dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
                 0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
+
+  //float dd_Lz = (-f_estimate + 0.0*d_f_measure)/mM  +
+  //              0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
 
   //printf("mK1:%f mM:%f last_dd_Lz:%f mK:%f  mL:%f\n",
   //        pControl->mK1, pControl->mM, pControl->last_dd_Lz, pControl->mK, pControl->mL);
@@ -1098,9 +1098,9 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   float d_w = dd_Lz/pControl->mR * pControl->mNdecrease;
 
 
-  printf("**********encoder:%f,%d\n",pTModule->mMagicControl.alfa_reco[0],pTModule->mRecMsg.mEncoderTurns);
+  //printf("**********encoder:%f,%d\n",pTModule->mMagicControl.alfa_reco[0],pTModule->mRecMsg.mEncoderTurns);
 
-  if((pTModule->mRCnt%1) == 0)
+  if((pTModule->mRCnt%10) == 0)
   printf("*****%s,dd_Lz:%f f_estimate:%f d_f_measure:%f d_alfi_measure:%f  alfa_m:%f alfa_now:%f  d_w:%f  f_re:%f %f %f\n",pTModule->mThreadName,
           dd_Lz, f_estimate, d_f_measure, d_alfi_measure, alfa_m, pControl->alfa_reco[0],d_w, pControl->F_reco[0], pControl->F_reco[1],pControl->F_reco[2]);
 
@@ -1111,7 +1111,7 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   float mVel = d_w*pTModule->sysDt + pTModule->mRecUseMsg.mMotors[2].mSpeed;
   float mTempVel = mVel;
 
-  printf("**********d_w:%f, sysDt:%f, cmd:%f, mMotorsSpeed:%f\n",d_w, pTModule->sysDt, mVel,pTModule->mRecUseMsg.mMotors[2].mSpeed);
+  //printf("**********d_w:%f, sysDt:%f, cmd:%f, mMotorsSpeed:%f\n",d_w, pTModule->sysDt, mVel,pTModule->mRecUseMsg.mMotors[2].mSpeed);
 
   /*
   //存储之前速度
@@ -1168,9 +1168,13 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   //mRopeEndL.x = pTModule->mRecUseMsg.mSiko1 * (3.0/0.5);
   //mRopeEndL.y = pTModule->mRecUseMsg.mSiko2 * (3.0/0.5);
   //x y轴设置死区间
-  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0025);
-  mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.0025);
+  //mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0025);
+  //mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.0025);
 
+  //x y轴设置死区间
+  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0025);
+  mRopeEndL.y =  deadZone((pTModule->mRecUseMsg.mSiko2+0.1*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK), 0.0025);
+  //printf("++++++siko_y:%f, alf:%f %f",pTModule->mRecUseMsg.mSiko2,pTModule->mMagicControl.alfa_reco[0],  10.0*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])) );
 
   BASE::ACC_2 mAcc;
   //mAcc = pidGetDa(pTModule->mMagicControl.mRopeEndL, pTModule->mMagicControl.mRopeEndLastL, 0.01);

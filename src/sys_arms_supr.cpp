@@ -714,7 +714,7 @@ static int32_t checkArmsCross(void)
 
       float dertX = (xy[0]-xyT[0])*(xy[0]-xyT[0]);
       float dertY = (xy[1]-xyT[1])*(xy[1]-xyT[1]);
-      if(sqrt(dertX+dertY)<0.45)
+      if(sqrt(dertX+dertY)<0.3)
       {
         mArmsModule[i].mRecUseMsg.mOverLap = 1;
         mArmsModule[j].mRecUseMsg.mOverLap = 1;
