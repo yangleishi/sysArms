@@ -28,6 +28,8 @@
 
 static BASE::ConfData mParames[DEF_SYS_MAX_ARMS_NUMS] = {0};
 
+static float  agvF[DEF_SYS_MAX_ARMS_NUMS][8] = {0};
+
 namespace INTERACTIONER {
 
 static int initServer(BASE::INTERACTION_THREAD_INFO *pTModule);
@@ -468,6 +470,25 @@ void* threadEntry(void* pModule)
       }
       case BASE::CMD_READ_CYC:
       {
+        /*agv*/
+        for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
+        {
+            for (int j=0; j<7;j++)
+            {
+              agvF[i][j] = agvF[i][j+1];
+            }
+            agvF[i][7] = mArmsDatas[i].mTension;
+        }
+
+        for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
+        {
+            float tTen = 0;
+            for (int j=0; j<8;j++)
+            {
+              tTen += agvF[i][j];
+            }
+            mArmsDatas[i].mTension = tTen/8.0;
+        }
         sendMsgToUpper(pTModule, BASE::CMD_ACK_READ_CYC, 0, (char*)mArmsDatas, sizeof(BASE::ARMS_R_USE_MSG)*DEF_SYS_MAX_ARMS_NUMS);
         break;
       }

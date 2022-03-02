@@ -806,7 +806,7 @@ typedef struct: public THREAD_INFO_HEADER
   uint16_t   mRandomCode;
 
   //
-  float      mPoxR,mPoxTx,mPoxTy;
+  float      mPoxR,mPoxTx,mPoxTy,mPoxTz;
 
 } ARMS_THREAD_INFO;
 

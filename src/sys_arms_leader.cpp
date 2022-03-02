@@ -269,6 +269,9 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mRecUseMsg.mMotors[0].mPosition = pTModule->mPoxR*pTModule->mRecUseMsg.mMotors[0].mPosition - pTModule->mPoxTx;
   pTModule->mRecUseMsg.mMotors[1].mPosition = pTModule->mPoxR*pTModule->mRecUseMsg.mMotors[1].mPosition - pTModule->mPoxTy;
 
+  pTModule->mRecUseMsg.mMotors[2].mPosition = (-7.6*(pTModule->mRecUseMsg.mMotors[2].mPosition) - pTModule->mPoxTz);
+
+
 
   //printf("************pos:%d %d %d %d\n",pTModule->mRecMsg.mMotors[0].mPosition/10000,pTModule->mRecMsg.mMotors[1].mPosition/10000,
   //                                       pTModule->mRecMsg.mMotors[2].mPosition/10000,pTModule->mRecMsg.mMotors[3].mPosition/10000);

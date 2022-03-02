@@ -123,6 +123,8 @@ const float  LEADER_MOTOR_POS_R[4] = {1,1,-1,-1};
 const float  LEADER_MOTOR_POS_Tx[4] = {1376.22,1320.50,-1313.35,-1028.59};
 const float  LEADER_MOTOR_POS_Ty[4] = {1409.92,1132.37,-1185.47,-1374.36};
 
+const float  LEADER_MOTOR_POS_Tz[4] = {-1045.3,-2125.591,-2217.676,-2133.185};
+
 //log日志保存的几个文件路径
 const char MN_INTERACTION_CONF_FILE[] = ".armsConf.conf";
 const char MN_LOGER_PRINTF_FILE[] = "sysArms.log";

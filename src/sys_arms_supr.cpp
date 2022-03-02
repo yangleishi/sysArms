@@ -358,6 +358,7 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].mPoxR = CONF::LEADER_MOTOR_POS_R[qIdx-1];
     mArmsModule[qIdx-1].mPoxTx = CONF::LEADER_MOTOR_POS_Tx[qIdx-1];
     mArmsModule[qIdx-1].mPoxTy = CONF::LEADER_MOTOR_POS_Ty[qIdx-1];
+    mArmsModule[qIdx-1].mPoxTz = CONF::LEADER_MOTOR_POS_Tz[qIdx-1];
 
     for (int motor=0;motor<4;motor++)
       mArmsModule[qIdx-1].motorDirection[motor] = CONF::LEADER_MOTOR_DIRECTION[qIdx-1][motor];
@@ -766,17 +767,27 @@ static int32_t suprMainLoop(){
       handleArmsCrossing();
 
     //test save app arms data log
-    LOGER::PrintfLog(BASE::S_ARMS_DATA, "13.6 12 10.3 1111.9 23.8 90");
+    //LOGER::PrintfLog(BASE::S_ARMS_DATA, "13.6 12 10.3 1111.9 23.8 90");
 
 
+    char printfData[1000] = {0};
+    char moduleData[250] = {0};
     //copy now datas
     pthread_mutex_lock(&mSuprDataToInt.mArmsNowDatasMutex);
     for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
     {
       //copy run datas
       memcpy((char*)&mSuprDataToInt.mRecMsgsDatas[qIdx], (char*)&mArmsModule[qIdx].mRecUseMsg, sizeof(BASE::ARMS_R_USE_MSG));
+
+      //data
+      sprintf(moduleData, "%.4f %.4f %.4f %.4f %.3f %.3f %.3f %.3f %.3f %.3f ", mArmsModule[qIdx].mRecUseMsg.mSiko1, mArmsModule[qIdx].mRecUseMsg.mSiko2, mArmsModule[qIdx].mMagicControl.alfa_reco[0],
+                                                     mArmsModule[qIdx].mMagicControl.F_reco[0],mArmsModule[qIdx].mMagicControl.mCmdV.v_p[0],mArmsModule[qIdx].mMagicControl.mCmdV.v_p[1],mArmsModule[qIdx].mMagicControl.mCmdV.v_p[2],
+                                                     mArmsModule[qIdx].mRecUseMsg.mMotors[0].mSpeed, mArmsModule[qIdx].mRecUseMsg.mMotors[1].mSpeed,mArmsModule[qIdx].mRecUseMsg.mMotors[2].mSpeed);
+      strcat(printfData, moduleData);
     }
     pthread_mutex_unlock(&mSuprDataToInt.mArmsNowDatasMutex);
+
+    //LOGER::PrintfLog(BASE::S_ARMS_DATA, "%s",printfData);
 
     //notice leader cycle
     for (int qIdx = 0; qIdx < DEF_SYS_USE_ARMS_NUMS; qIdx++)
