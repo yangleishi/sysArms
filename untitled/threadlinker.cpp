@@ -109,6 +109,7 @@ void ThreadLinker::handleRecDatagrams(BASE::MArmsUpData &mMsg)
             BASE::ARMS_R_USE_MSG *pShow = (BASE::ARMS_R_USE_MSG *)malloc(sizeof(BASE::ARMS_R_USE_MSG)*SYS_ARMS_MAX_SIZE);
             memcpy((char*)pShow, mMsg.Datas, sizeof(BASE::ARMS_R_USE_MSG)*SYS_ARMS_MAX_SIZE);
             sendDataTowind(BASE::MSG_ACK_RUN_SHOW, 0, (char*)pShow);
+
             break;
         }
         case BASE::CMD_ACK_READ_SHOWDE_DATAS :{

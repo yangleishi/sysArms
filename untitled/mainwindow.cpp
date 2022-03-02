@@ -1546,6 +1546,9 @@ void MainWindow::showCycMessage(BASE::ARMS_R_USE_MSG *pShowMsg)
         mMulticatMsg.mPosX[i] = pShowMsg[i].mMotors[0].mPosition*1000;
         mMulticatMsg.mPosY[i] = pShowMsg[i].mMotors[1].mPosition*1000;
         mMulticatMsg.mPosZ[i] = pShowMsg[i].mMotors[2].mPosition*1000;
+
+        mMulticatMsg.mSikoX[i] = (pShowMsg[i].mSiko1*1000.0);
+        mMulticatMsg.mSikoY[i] = (pShowMsg[i].mSiko2*1000.0);
     }
 
     //多播传输

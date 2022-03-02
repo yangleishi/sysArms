@@ -310,6 +310,10 @@ typedef struct
   int32_t    mPosY[8];
   int32_t    mPosZ[8];
 
+  //sikos
+  float    mSikoX[8];
+  float    mSikoY[8];
+
   //需要哪些数据随后加
 
 } ARMS_MULTICAST_UDP;
