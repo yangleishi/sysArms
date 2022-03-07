@@ -1557,7 +1557,7 @@ void MainWindow::showCycMessage(BASE::ARMS_R_USE_MSG *pShowMsg)
 
 void MainWindow::readData502()
 {
-    BASE::ARMS_MULTICAST_UDP mMsg;
+    BASE::ARMS_MULTICAST_UDP mMsg = {0};
     while(m_MulticastSend->hasPendingDatagrams())
     {
         memset((char*)&mMsg, 0, sizeof(BASE::ARMS_MULTICAST_UDP));
@@ -1565,6 +1565,13 @@ void MainWindow::readData502()
         if(recSize == sizeof(BASE::ARMS_MULTICAST_UDP))
         {
           qDebug()<<mMsg.mIdentifier<<"  "<<mMsg.mCmd;
+          if(mMsg.mCmd==1)
+          {
+              slotsButtonRunStart();
+          }
+          else {
+              slotsButtonRunStop();
+          }
         }
         qDebug()<<" rec multicast "<<recSize;
     }

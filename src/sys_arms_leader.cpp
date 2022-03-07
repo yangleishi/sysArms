@@ -1174,7 +1174,8 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   //mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0025);
   //mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.0025);
 
-  //x y轴设置死区间
+  //x y轴设置死区间.
+  //502修改算法死区
   mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0025);
   mRopeEndL.y =  deadZone((pTModule->mRecUseMsg.mSiko2+0.1*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK), 0.0025);
   //printf("++++++siko_y:%f, alf:%f %f",pTModule->mRecUseMsg.mSiko2,pTModule->mMagicControl.alfa_reco[0],  10.0*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])) );
