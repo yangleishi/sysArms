@@ -119,8 +119,8 @@ const int  LEADER_MOTOR_DIRECTION[][4] = {{1,1,-1,1},
                                           {-1,-1,-1,1},
                                           {-1,-1,-1,1}};
 
-const int  LEADER_LEVEL_DIRECTION[][2] = {{1,1},
-                                          {1,1},
+const int  LEADER_LEVEL_DIRECTION[][2] = {{-1,1},
+                                          {-1,1},
                                           {1,1},
                                           {1,1}};
 

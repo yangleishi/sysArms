@@ -39,7 +39,7 @@
 #define AVG_SIZE    (9)
 
 //shui ping yi滤波尺寸
-#define LEVEL_AVG_SIZE    (499)
+#define LEVEL_AVG_SIZE    (199)
 
 #define XYV_AVG_SIZE    (1)
 

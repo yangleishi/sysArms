@@ -235,6 +235,7 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   if(strcmp(pTModule->mThreadName, "MN_SERVER2") == 0)
   printf("**********%s encoder:%d\n",pTModule->mThreadName,pTModule->mRecMsg.mEncoderTurns);
   */
+  //printf("tnesion:%d\n",pTModule->mRecMsg.mTension);
   //拉力计除以100，变成g
   pTModule->mRecMsg.mTension /= 100;
 
@@ -244,6 +245,7 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   //pTModule->mRecMsg.mTension = 40000;
   //printf("拉力计:%d\n",pTModule->mRecMsg.mTension);
   int32_t mTempTension = pTModule->mRecMsg.mTension;
+
   //拉力计滤波
   for (int i=0; i<AVG_SIZE; i++)
   {
@@ -300,7 +302,7 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mRecUseMsg.mInclinometer1_y = pTModule->mRecMsg.mInclinometer1_x*0.001;     //单位为角度
   //水平仪器转换
   pTModule->mRecUseMsg.mInclinometer1_dertX = (pTModule->mRecUseMsg.mInclinometer1_x-pTModule->mConfParam->mInclinometerX)*0.0175/11.3;     //单位为rad
-  pTModule->mRecUseMsg.mInclinometer1_dertY = (pTModule->mRecUseMsg.mInclinometer1_y-pTModule->mConfParam->mInclinometerY)*0.0175/11.3;     //单位为rad
+  pTModule->mRecUseMsg.mInclinometer1_dertY = (pTModule->mRecUseMsg.mInclinometer1_y-pTModule->mConfParam->mInclinometerY)*0.0175/10.0;     //单位为rad
   //dert Inclinometer
   for (int i=0; i<LEVEL_AVG_SIZE; i++)
   {
@@ -351,8 +353,8 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mRecUseMsg.mSiko2 /= (AVG_SIZE+1.0);
 
   //Inclim compensate Y
-  //pTModule->mRecUseMsg.mSiko1       += pTModule->mRecUseMsg.mLevelSiko1;
-  pTModule->mRecUseMsg.mSiko2       += pTModule->mRecUseMsg.mLevelSiko2;
+  pTModule->mRecUseMsg.mSiko1       += (pTModule->mRecUseMsg.mLevelSiko1*pTModule->levelChangeSikoXYDirection[0]);
+  pTModule->mRecUseMsg.mSiko2       += (pTModule->mRecUseMsg.mLevelSiko2*pTModule->levelChangeSikoXYDirection[1]);
 
  // printf("%f %d, %f %d\n", pTModule->mRecUseMsg.mSiko1,pTModule->mRecMsg.mSiko1, pTModule->mRecUseMsg.mSiko2,pTModule->mRecMsg.mSiko2);
 
@@ -780,7 +782,8 @@ static int32_t runningPhase(BASE::ARMS_THREAD_INFO *pTModule)
       if(*(pTModule->mIsRun) == 1)
       {
           followagic(pTModule);
-          pullMagic(pTModule);//函数计算出收放收缩加速度。
+          if(strcmp(pTModule->mThreadName, "MN_SERVER1") != 0)  //arms1 only follow
+            pullMagic(pTModule);//函数计算出收放收缩加速度。
       }else if (*(pTModule->mIsRun) == 2) {
           followagic(pTModule);
       }else if (*(pTModule->mIsRun) == 3) {
@@ -1212,14 +1215,23 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 
   //x y轴设置死区间.
   //502修改算法死区
-  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0015);
-  mRopeEndL.y =  deadZone((pTModule->mRecUseMsg.mSiko2+0.1*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK), 0.0015);
+  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.01);
+  //mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.002);
+  mRopeEndL.y =  deadZone((pTModule->mRecUseMsg.mSiko2+0.1*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK), 0.003);
   //printf("++++++siko_y:%f, alf:%f %f",pTModule->mRecUseMsg.mSiko2,pTModule->mMagicControl.alfa_reco[0],  10.0*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])) );
 
   BASE::ACC_2 mAcc;
   //mAcc = pidGetDa(pTModule->mMagicControl.mRopeEndL, pTModule->mMagicControl.mRopeEndLastL, 0.01);
   mAcc.x = kp * mRopeEndL.x + kd*(mRopeEndL.x-pTModule->mMagicControl.mRopeEndLastL.x)/pTModule->sysDt;
   mAcc.y = kp * mRopeEndL.y + kd*(mRopeEndL.y-pTModule->mMagicControl.mRopeEndLastL.y)/pTModule->sysDt;
+
+  //ceshi
+  /*
+  if(fabs((pTModule->mRecUseMsg.mSiko2+0.1*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK)) < 0.002)
+     mAcc.y = 0;
+  if(fabs(pTModule->mRecUseMsg.mSiko1*(sikoK)) < 0.002)
+     mAcc.x = 0;
+  */
 
   pTModule->mMagicControl.mRopeEndLastL = mRopeEndL;
 
