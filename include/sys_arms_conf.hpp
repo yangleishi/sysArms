@@ -119,6 +119,11 @@ const int  LEADER_MOTOR_DIRECTION[][4] = {{1,1,-1,1},
                                           {-1,-1,-1,1},
                                           {-1,-1,-1,1}};
 
+const int  LEADER_LEVEL_DIRECTION[][2] = {{1,1},
+                                          {1,1},
+                                          {1,1},
+                                          {1,1}};
+
 const float  LEADER_MOTOR_POS_R[4] = {1,1,-1,-1};
 const float  LEADER_MOTOR_POS_Tx[4] = {1376.22,1320.50,-1313.35,-1028.59};
 const float  LEADER_MOTOR_POS_Ty[4] = {1409.92,1132.37,-1185.47,-1374.36};

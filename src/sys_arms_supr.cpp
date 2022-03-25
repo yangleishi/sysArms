@@ -363,6 +363,10 @@ static int32_t startModules(void) {
     for (int motor=0;motor<4;motor++)
       mArmsModule[qIdx-1].motorDirection[motor] = CONF::LEADER_MOTOR_DIRECTION[qIdx-1][motor];
 
+    mArmsModule[qIdx-1].levelChangeSikoXYDirection[0] = CONF::LEADER_LEVEL_DIRECTION[qIdx-1][0];
+    mArmsModule[qIdx-1].levelChangeSikoXYDirection[1] = CONF::LEADER_LEVEL_DIRECTION[qIdx-1][1];
+
+
     gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_NAME[qIdx],
                                                  LEADER::threadEntry,
                                                  CONF::PRI_LEAD,
@@ -576,6 +580,12 @@ static void handleInteractionCmd()
               pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
             }
             //printf("%d %d %d %d*********supr\n",mIsRun[0],mIsRun[1],mIsRun[2],mIsRun[3]);
+            break;
+          }
+          case BASE::CMD_CHANGE_ConfSaveSiko:
+          {
+            //copy move to leaders
+
             break;
           }
           case BASE::CMD_RUN_STOP:

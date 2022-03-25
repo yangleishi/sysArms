@@ -192,6 +192,7 @@ const uint16_t  CMD_READ_PLAYBACK = CMD_BASE + 15;
 const uint16_t  CMD_READ_CYC = CMD_BASE + 16;
 const uint16_t  CMD_CLEAR_MOTOR_ERROR = CMD_BASE + 17;
 const uint16_t  CMD_CALIBRATE_ARM = CMD_BASE + 18;
+const uint16_t  CMD_CHANGE_ConfSaveSiko = CMD_BASE + 19;
 
 
 //循环的读取arms数据
@@ -272,9 +273,17 @@ typedef struct
 
   float   mInclinometer1_x;     //单位为角度
   float   mInclinometer1_y;     //单位为角度
+  float   mInclinometer1_dertX;
+  float   mInclinometer1_dertY;     //单位为
+
+
 
   float   mSiko1;            //单位为毫米
   float   mSiko2;
+
+  float  mLevelSiko1;
+  float  mLevelSiko2;
+
   float   mEncoderTurns;     //单位为角度*1000。
   //四个电机数据,已经转换成float
   MOTOR_REC_USE_DATAS mMotors[4];
@@ -360,6 +369,9 @@ typedef struct{
   float mCo;
 
   float mConfTension;
+
+  float mInclinomenterX;
+  float mInclinomenterY;
 
   int   mIsValid;
 } ConfData;

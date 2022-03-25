@@ -641,6 +641,16 @@ void MainWindow::signalsSlotsConnects()
 
     connect(ui->pb_save_sikoxy, SIGNAL(clicked()), this, SLOT(slotsButtonReSaveSiko()), Qt::QueuedConnection);
 
+    //siko 算法运行期间调整
+    connect(ui->pb_sikoX_add, SIGNAL(clicked()), this, SLOT(slotsButtonAddSikoX()), Qt::QueuedConnection);
+    connect(ui->pb_sikoX_de, SIGNAL(clicked()), this, SLOT(slotsButtonDeSikoX()), Qt::QueuedConnection);
+    connect(ui->pb_sikoY_add, SIGNAL(clicked()), this, SLOT(slotsButtonAddSikoY()), Qt::QueuedConnection);
+    connect(ui->pb_sikoY_de, SIGNAL(clicked()), this, SLOT(slotsButtonDeSikoY()), Qt::QueuedConnection);
+
+    //将当前显示的水平仪ＸＹ　设置起始角度
+    connect(ui->pb_conf_SaveLevel, SIGNAL(clicked()), this, SLOT(slotsButtonReadLevelXY()), Qt::QueuedConnection);
+
+
     //起吊界面按钮做的动作
     connect(mLiftHandCheckBoxModule, SIGNAL(currentIndexChanged(int)), this, SLOT(liftModuleChanged(int)));
     connect(ui->liftPB_allM_start, SIGNAL(clicked()), this, SLOT(slotsButtonLiftAllMoveStart()), Qt::QueuedConnection);
@@ -1121,6 +1131,8 @@ void MainWindow::slotsButtonSaveConf()
             mModulesConfDatas[i].mWn               = ui->conf_Wn->text().toFloat();
             mModulesConfDatas[i].mCo               = ui->conf_Co->text().toFloat();
             mModulesConfDatas[i].mConfTension      = ui->Line_calibrat_tension->text().toFloat();
+            mModulesConfDatas[i].mInclinomenterX   = ui->conf_LevelX->text().toFloat();
+            mModulesConfDatas[i].mInclinomenterY      = ui->conf_LevelY->text().toFloat();
         }
     }
 
@@ -1184,6 +1196,8 @@ void MainWindow::slotsButtonCalibrateTension()
             mModulesConfDatas[i].mCo               = ui->conf_Co->text().toFloat();
             mModulesConfDatas[i].mConfTension      = ui->Line_calibrat_tension->text().toFloat();
             mModulesConfDatas[i].mConfTension += (mModulesConfDatas[i].mConfSaveWeight*1000 - mConfReadPull[i]->text().toFloat());
+            mModulesConfDatas[i].mInclinomenterX   = ui->conf_LevelX->text().toFloat();
+            mModulesConfDatas[i].mInclinomenterY      = ui->conf_LevelY->text().toFloat();
         }
     }
     //将配置数据发送给linker线程，
@@ -1217,6 +1231,8 @@ void MainWindow::slotsButtonReSaveSiko()
             mModulesConfDatas[i].mWn               = ui->conf_Wn->text().toFloat();
             mModulesConfDatas[i].mCo               = ui->conf_Co->text().toFloat();
             mModulesConfDatas[i].mConfTension      = ui->Line_calibrat_tension->text().toFloat();
+            mModulesConfDatas[i].mInclinomenterX   = ui->conf_LevelX->text().toFloat();
+            mModulesConfDatas[i].mInclinomenterY      = ui->conf_LevelY->text().toFloat();
         }
     }
     //将配置数据发送给linker线程，
@@ -1224,6 +1240,36 @@ void MainWindow::slotsButtonReSaveSiko()
     sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RCONF, 0, 0);
 
 }
+
+void MainWindow::slotsButtonAddSikoX()
+{
+    qDebug()<<"sikoX add";
+}
+
+void MainWindow::slotsButtonDeSikoX()
+{
+    qDebug()<<"sikoX de";
+}
+
+void MainWindow::slotsButtonAddSikoY()
+{
+    qDebug()<<"sikoY add";
+}
+void MainWindow::slotsButtonDeSikoY()
+{
+    qDebug()<<"sikoY de";
+}
+
+void MainWindow::slotsButtonReadLevelXY()
+{
+    int Rindex = mLiftHandCheckBoxModule->currentIndex();
+    float levelX = mConfReadLevelX[Rindex]->text().toFloat();
+    float levelY = mConfReadLevelY[Rindex]->text().toFloat();
+
+    ui->conf_LevelX->setText(QString("%1").arg(levelX));
+    ui->conf_LevelY->setText(QString("%1").arg(levelY));
+}
+
 /**********************************************************
 * @param : [in]
 * @return Descriptions
@@ -1498,6 +1544,8 @@ void MainWindow::showConfMessage(BASE::ConfData *pShowMsg)
             ui->conf_Co->setText(QString("%1").arg(pShowMsg[i].mCo));
             ui->Line_calibrat_tension->setText(QString("%1").arg(pShowMsg[i].mConfTension));
             ui->calibrate_kg->setText(QString("%1").arg(pShowMsg[i].mConfSaveWeight));
+            ui->conf_LevelX->setText(QString("%1").arg(pShowMsg[i].mInclinomenterX));
+            ui->conf_LevelY->setText(QString("%1").arg(pShowMsg[i].mInclinomenterY));
         }
     }
 }

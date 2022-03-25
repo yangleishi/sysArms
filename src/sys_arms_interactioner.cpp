@@ -139,7 +139,7 @@ static int readConfig(BASE::ConfData * mParame)
 
     for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
     {
-      fprintf(pFile, "%f %f %f %f %f %f %f %f %f\n",
+      fprintf(pFile, "%f %f %f %f %f %f %f %f %f %f %f\n",
                                       mTParame->mConfSaveWeight,
                                       mTParame->mConfSaveSikoX,
                                       mTParame->mConfSaveSikoY,
@@ -148,7 +148,9 @@ static int readConfig(BASE::ConfData * mParame)
                                       mTParame->mFollowKd,
                                       mTParame->mWn,
                                       mTParame->mCo,
-                                      mTParame->mConfTension);
+                                      mTParame->mConfTension,
+                                      mTParame->mInclinometerX,
+                                      mTParame->mInclinometerY);
       mTParame++;
     }
     fclose(pFile);
@@ -159,7 +161,7 @@ static int readConfig(BASE::ConfData * mParame)
   for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS; i++)
   {
 
-    fscanf(pFile, "%f %f %f %f %f %f %f %f %f\n",
+    fscanf(pFile, "%f %f %f %f %f %f %f %f %f %f %f\n",
                     &(mTParame->mConfSaveWeight),
                     &(mTParame->mConfSaveSikoX),
                     &(mTParame->mConfSaveSikoY),
@@ -168,7 +170,9 @@ static int readConfig(BASE::ConfData * mParame)
                     &(mTParame->mFollowKd),
                     &(mTParame->mWn),
                     &(mTParame->mCo),
-                    &(mTParame->mConfTension));
+                    &(mTParame->mConfTension),
+                    &(mTParame->mInclinometerX),
+                    &(mTParame->mInclinometerY));
 
     //printf("%f %f %f %f %f %f\n",mTParame->mConfSaveWeight, mTParame->mConfSaveEncoderX, mTParame->mConfSaveEncoderY,
     //                             mTParame->mConfSaveEncoderZ, mTParame->mConfSaveEncoderP, mTParame->mConfSaveEncoderT);
@@ -207,7 +211,7 @@ static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
 
   for (int i=0; i<mPNum; i++)
   {
-    fprintf(pFile, "%f %f %f %f %f %f %f %f %f\n",
+    fprintf(pFile, "%f %f %f %f %f %f %f %f %f %f %f\n",
                                     mParames[i].mConfSaveWeight,
                                     mParames[i].mConfSaveSikoX,
                                     mParames[i].mConfSaveSikoY,
@@ -216,8 +220,10 @@ static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
                                     mParames[i].mFollowKd,
                                     mParames[i].mWn,
                                     mParames[i].mCo,
-                                    mParames[i].mConfTension);
-    printf("%f %f %f %f %f %f %f %f %f\n",
+                                    mParames[i].mConfTension,
+                                    mParames[i].mInclinometerX,
+                                    mParames[i].mInclinometerY);
+    printf("%f %f %f %f %f %f %f %f %f %f %f\n",
            mParames[i].mConfSaveWeight,
            mParames[i].mConfSaveSikoX,
            mParames[i].mConfSaveSikoY,
@@ -226,11 +232,13 @@ static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
            mParames[i].mFollowKd,
            mParames[i].mWn,
            mParames[i].mCo,
-           mParames[i].mConfTension);
+           mParames[i].mConfTension,
+           mParames[i].mInclinometerX,
+           mParames[i].mInclinometerY);
   }
 
   //拷贝给leader线程
-  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS;i++)
+  for (int i=0; i<DEF_SYS_USE_ARMS_NUMS; i++)
   {
       if(sParame[i].mIsValid == 1)
       {
@@ -243,6 +251,8 @@ static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
           pTModule->mConfParam[i].mWn = sParame[i].mWn;
           pTModule->mConfParam[i].mCo = sParame[i].mCo;
           pTModule->mConfParam[i].mConfTension = sParame[i].mConfTension;
+          pTModule->mConfParam[i].mInclinometerX = sParame[i].mInclinometerX;
+          pTModule->mConfParam[i].mInclinometerY = sParame[i].mInclinometerY;
       }
   }
 
@@ -391,6 +401,8 @@ void* threadEntry(void* pModule)
     pTModule->mConfParam[i].mWn = mParames[i].mWn;
     pTModule->mConfParam[i].mCo = mParames[i].mCo;
     pTModule->mConfParam[i].mConfTension = mParames[i].mConfTension;
+    pTModule->mConfParam[i].mInclinometerX = mParames[i].mInclinometerX;
+    pTModule->mConfParam[i].mInclinometerY = mParames[i].mInclinometerY;
   }
 
   //初始化模块

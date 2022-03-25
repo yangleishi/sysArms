@@ -91,6 +91,14 @@ public slots:
    void slotsButtonReSaveSiko();
    void slotsButtonCalibrateTension();
 
+   //算法运行期间,手动调整磁珊尺增减
+   void slotsButtonAddSikoX();
+   void slotsButtonDeSikoX();
+   void slotsButtonAddSikoY();
+   void slotsButtonDeSikoY();
+   void slotsButtonReadLevelXY();
+
+
    //显示界面细节1-3点击显示绘曲线，此函数被触发
    void slotsButtonDetailShow();
    //显示界面数据回放，只显示拉力，编码器、输入速度，输出速度

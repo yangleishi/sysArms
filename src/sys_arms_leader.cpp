@@ -295,13 +295,49 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mRecUseMsg.mEncoderTurns /= (AVG_SIZE+1.0);
 
 
+  /**********************************水平仪器转换************************************/
+  pTModule->mRecUseMsg.mInclinometer1_x = pTModule->mRecMsg.mInclinometer1_y*0.001;     //单位为角度
+  pTModule->mRecUseMsg.mInclinometer1_y = pTModule->mRecMsg.mInclinometer1_x*0.001;     //单位为角度
+  //水平仪器转换
+  pTModule->mRecUseMsg.mInclinometer1_dertX = (pTModule->mRecUseMsg.mInclinometer1_x-pTModule->mConfParam->mInclinometerX)*0.0175/11.3;     //单位为rad
+  pTModule->mRecUseMsg.mInclinometer1_dertY = (pTModule->mRecUseMsg.mInclinometer1_y-pTModule->mConfParam->mInclinometerY)*0.0175/11.3;     //单位为rad
+  //dert Inclinometer
+  for (int i=0; i<LEVEL_AVG_SIZE; i++)
+  {
+    pTModule->mRecUseMsg.mInclinometer1_dertX += pTModule->mDertInclim[i].x;
+    pTModule->mRecUseMsg.mInclinometer1_dertY += pTModule->mDertInclim[i].y;
+    pTModule->mDertInclim[i] = pTModule->mDertInclim[i+1];
+  }
+  pTModule->mDertInclim[LEVEL_AVG_SIZE].x = (pTModule->mRecUseMsg.mInclinometer1_x-pTModule->mConfParam->mInclinometerX)*0.0175/11.3;
+  pTModule->mDertInclim[LEVEL_AVG_SIZE].y = (pTModule->mRecUseMsg.mInclinometer1_y-pTModule->mConfParam->mInclinometerY)*0.0175/11.3;
+  pTModule->mRecUseMsg.mInclinometer1_dertX /= (LEVEL_AVG_SIZE+1.0);
+  pTModule->mRecUseMsg.mInclinometer1_dertY /= (LEVEL_AVG_SIZE+1.0);
+  pTModule->mRecUseMsg.mLevelSiko1 = (0.5*sin(pTModule->mRecUseMsg.mInclinometer1_dertX));
+  pTModule->mRecUseMsg.mLevelSiko2 = (0.5*sin(pTModule->mRecUseMsg.mInclinometer1_dertY));
+
+  /*
+  if(strcmp(pTModule->mThreadName,"MN_SERVER4") == 0)
+        printf("recMsg:levelXY(%f %f) dertXY(%f %f) conf(%f %f)  mLevelSiko(%f %f)\n",
+               pTModule->mRecUseMsg.mInclinometer1_x,
+               pTModule->mRecUseMsg.mInclinometer1_y,
+              pTModule->mDertInclim[LEVEL_AVG_SIZE].x,
+              pTModule->mDertInclim[LEVEL_AVG_SIZE].y,
+               pTModule->mConfParam->mInclinometerX,
+               pTModule->mConfParam->mInclinometerY,
+              pTModule->mRecUseMsg.mLevelSiko1,
+              pTModule->mRecUseMsg.mLevelSiko2);
+  */
+ /**********************************水平仪器转换 end************************************/
+
+
   //ci shan chi zhuanhuan juedui
   pTModule->mRecMsg.mSiko1 *= pTModule->motorDirection[0];
   pTModule->mRecMsg.mSiko2 *= pTModule->motorDirection[1];
 
   //m单位
-  pTModule->mRecUseMsg.mSiko1       = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoX*0.001;
-  pTModule->mRecUseMsg.mSiko2       = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoY*0.001;
+  pTModule->mRecUseMsg.mSiko1 = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoX*0.001;
+  pTModule->mRecUseMsg.mSiko2 = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoY*0.001;
+
   //慈善尺滤波
   for (int i=0; i<AVG_SIZE; i++)
   {
@@ -310,16 +346,16 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
     pTModule->mRecUseMsg.mSiko2 += pTModule->mSikoAvg[i].y;
   }
   pTModule->mSikoAvg[AVG_SIZE].x = ((float)pTModule->mRecMsg.mSiko1)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoX*0.001;
-  pTModule->mSikoAvg[AVG_SIZE].y = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoY*0.001;;
+  pTModule->mSikoAvg[AVG_SIZE].y = ((float)pTModule->mRecMsg.mSiko2)*0.01*0.001 - pTModule->mConfParam->mConfSaveSikoY*0.001;
   pTModule->mRecUseMsg.mSiko1 /= (AVG_SIZE+1.0);
   pTModule->mRecUseMsg.mSiko2 /= (AVG_SIZE+1.0);
 
+  //Inclim compensate Y
+  //pTModule->mRecUseMsg.mSiko1       += pTModule->mRecUseMsg.mLevelSiko1;
+  pTModule->mRecUseMsg.mSiko2       += pTModule->mRecUseMsg.mLevelSiko2;
 
-  //printf("%f %d, %f %d\n", pTModule->mRecUseMsg.mSiko1,pTModule->mRecMsg.mSiko1, pTModule->mRecUseMsg.mSiko2,pTModule->mRecMsg.mSiko2);
+ // printf("%f %d, %f %d\n", pTModule->mRecUseMsg.mSiko1,pTModule->mRecMsg.mSiko1, pTModule->mRecUseMsg.mSiko2,pTModule->mRecMsg.mSiko2);
 
-  //水平仪器转换
-  pTModule->mRecUseMsg.mInclinometer1_x = pTModule->mRecMsg.mInclinometer1_x*0.001;     //单位为角度
-  pTModule->mRecUseMsg.mInclinometer1_y = pTModule->mRecMsg.mInclinometer1_y*0.001;     //单位为角度
 
   //采集三周期数据
   //存储摆动角、拉力值
@@ -1176,8 +1212,8 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 
   //x y轴设置死区间.
   //502修改算法死区
-  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0025);
-  mRopeEndL.y =  deadZone((pTModule->mRecUseMsg.mSiko2+0.1*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK), 0.0025);
+  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0015);
+  mRopeEndL.y =  deadZone((pTModule->mRecUseMsg.mSiko2+0.1*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK), 0.0015);
   //printf("++++++siko_y:%f, alf:%f %f",pTModule->mRecUseMsg.mSiko2,pTModule->mMagicControl.alfa_reco[0],  10.0*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])) );
 
   BASE::ACC_2 mAcc;
@@ -1279,7 +1315,7 @@ void* threadEntry(void* pModule)
 
     if(size != sizeof(BASE::ARMS_R_MSG))
     {
-      sprintf(printfError,"%s no client link, or size < rec msg\n",pTModule->mThreadName);
+      sprintf(printfError,"%s no client link, or size < rec msg, size:%d\n",pTModule->mThreadName,size);
       //LOGER::PrintfLog(BASE::S_APP_LOGER, "state: %s, no client link, or size < rec msg", pTModule->mThreadName);
       //只有在conf 或者 run 模式下超时才转换到stop模式
       if((pTModule->mState == BASE::M_STATE_CONF) || (pTModule->mState == BASE::M_STATE_RUN))

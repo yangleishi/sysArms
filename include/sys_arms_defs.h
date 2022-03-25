@@ -38,6 +38,9 @@
 //慈善尺滤波尺寸
 #define AVG_SIZE    (9)
 
+//shui ping yi滤波尺寸
+#define LEVEL_AVG_SIZE    (499)
+
 #define XYV_AVG_SIZE    (1)
 
 namespace BASE {
@@ -421,8 +424,15 @@ typedef struct
   float   mInclinometer1_x;     //单位为角度
   float   mInclinometer1_y;     //单位为角度
 
-  float   mSiko1;            //单位为毫米
+  float   mInclinometer1_dertX;     //单位为角度
+  float   mInclinometer1_dertY;     //单位为角度
+
+  float   mSiko1;            //单位为米
   float   mSiko2;
+
+  float   mLevelSiko1;            //单位毫米
+  float   mLevelSiko2;
+
   float   mEncoderTurns;     //单位为角度*1000。
   //四个电机数据,已经转换成float
   MOTOR_REC_USE_DATAS mMotors[4];
@@ -487,6 +497,7 @@ const uint16_t  CMD_READ_PLAYBACK = CMD_BASE + 15;
 const uint16_t  CMD_READ_CYC = CMD_BASE + 16;
 const uint16_t  CMD_CLEAR_MOTOR_ERROR = CMD_BASE + 17;
 const uint16_t  CMD_CALIBRATE_ARM = CMD_BASE + 18;
+const uint16_t  CMD_CHANGE_ConfSaveSiko = CMD_BASE + 19;
 
 //接收到上位机控制按钮后，运行期间leader陷入条件运行状态
 const uint16_t  CMD_INTO_COND_RUN = CMD_BASE + 20;
@@ -579,6 +590,10 @@ typedef struct{
 
   //laliji
   float mConfTension;
+
+  //start level x y
+  float mInclinometerX;
+  float mInclinometerY;
 
   int   mIsValid;
 } ConfData;
@@ -765,6 +780,9 @@ typedef struct: public THREAD_INFO_HEADER
   //motor fangxiang
   int motorDirection[4];
 
+  //level change siko direction
+  int levelChangeSikoXYDirection[2];
+
   //rec motor cmd
   int                mIsNowMotorCmd;
   LiftCmdData      mMoveData;
@@ -788,6 +806,9 @@ typedef struct: public THREAD_INFO_HEADER
 
   //系统控制周期
   float sysDt;
+
+  //Inclinometer avg
+  POS_2 mDertInclim[LEVEL_AVG_SIZE+1];
 
   //慈善尺滤波保存数组
   POS_2 mSikoAvg[AVG_SIZE+1];
