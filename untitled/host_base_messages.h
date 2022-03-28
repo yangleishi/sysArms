@@ -142,6 +142,9 @@ const int MSG_NOTICE_CURVEWID_CLOSE = MSG_NOTICE + 41;
 const int MSG_NOTICE_CURVEWID_SHOW = MSG_NOTICE + 42;
 const int MSG_NOTICE_CURVE_DATA = MSG_NOTICE + 43;
 
+/************************微调siko******************/
+const int MSG_NOTICE_CONF_RUN_SIKO = MSG_NOTICE + 44;
+
 /*************************ack msg******************************/
 const int MSG_NOTICE_ACK_LINK = MSG_NOTICE + 50;
 const int MSG_NOTICE_ACK_SCONF = MSG_NOTICE + 51;
@@ -150,6 +153,7 @@ const int MSG_NOTICE_ACK_RCONF = MSG_NOTICE + 52;
 
 const int MSG_NOTICE_ACK_UNLINK = MSG_NOTICE + 53;
 const int MSG_NOTICE_ACK_CYC = MSG_NOTICE + 54;
+
 
 const int MSG_NOTICE_KILL_ALL = MSG_NOTICE + 99;
 
@@ -322,6 +326,10 @@ typedef struct
   //sikos
   float    mSikoX[8];
   float    mSikoY[8];
+
+  //sikos显示,修改
+  float    mSikoSRX[8];
+  float    mSikoSRY[8];
 
   //需要哪些数据随后加
 

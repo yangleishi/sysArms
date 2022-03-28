@@ -58,6 +58,7 @@ private:
     int recSignalLiftAlPullModule(BASE::LiftCmdData *pData);
     int recSignalLiftAllPullStop();
     int recSignalLiftCmdModule(int mCmd, BASE::LiftCmdData *pData);
+    int recSignalConfSikoCmdModule(BASE::ConfData *pData);
 
 
     int recSignalRunStart(char* mData);

@@ -366,6 +366,7 @@ static int32_t startModules(void) {
     mArmsModule[qIdx-1].levelChangeSikoXYDirection[0] = CONF::LEADER_LEVEL_DIRECTION[qIdx-1][0];
     mArmsModule[qIdx-1].levelChangeSikoXYDirection[1] = CONF::LEADER_LEVEL_DIRECTION[qIdx-1][1];
 
+    mArmsModule[qIdx-1].levelSikoXY_L = CONF::LEADER_LEVEL_SIKO_L[qIdx-1];
 
     gHiMInfo[qIdx].mPid   = BASE::hiCreateThread(CONF::MN_NAME[qIdx],
                                                  LEADER::threadEntry,
@@ -585,6 +586,17 @@ static void handleInteractionCmd()
           case BASE::CMD_CHANGE_ConfSaveSiko:
           {
             //copy move to leaders
+            BASE::ConfData *sParame = (BASE::ConfData *)mmRecMsg.Datas;
+            for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS;i++)
+            {
+                if(sParame[i].mIsValid == 1 && i<DEF_SYS_USE_ARMS_NUMS)
+                {
+                    pthread_mutex_lock(&mArmsModule[i].mMotorMutex);
+                    mCalibParam[i].mConfSaveSikoX = sParame[i].mConfSaveSikoX;
+                    mCalibParam[i].mConfSaveSikoY = sParame[i].mConfSaveSikoY;
+                    pthread_mutex_unlock(&mArmsModule[i].mMotorMutex);
+                }
+            }
 
             break;
           }

@@ -119,10 +119,8 @@ const int  LEADER_MOTOR_DIRECTION[][4] = {{1,1,-1,1},
                                           {-1,-1,-1,1},
                                           {-1,-1,-1,1}};
 
-const int  LEADER_LEVEL_DIRECTION[][2] = {{-1,1},
-                                          {-1,1},
-                                          {1,1},
-                                          {1,1}};
+const int   LEADER_LEVEL_DIRECTION[][2] = {{-1,-1},{-1,1},{1,1},{1,1}};
+const float LEADER_LEVEL_SIKO_L[4] = {0.55,0.7,0.6,0.6};
 
 const float  LEADER_MOTOR_POS_R[4] = {1,1,-1,-1};
 const float  LEADER_MOTOR_POS_Tx[4] = {1376.22,1320.50,-1313.35,-1028.59};

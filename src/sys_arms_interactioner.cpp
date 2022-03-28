@@ -42,6 +42,8 @@ static void changeState(BASE::INTERACTION_THREAD_INFO *pTModule, uint16_t mCmd);
 //config file
 static int readConfig(BASE::ConfData  * mParame);
 static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum);
+static int writeSikoConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum);
+
 
 static int sendPlayBack(BASE::INTERACTION_THREAD_INFO *pTModule, int32_t mStart);
 //config handle move
@@ -260,6 +262,67 @@ static int writeConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
   return iRet;
 }
 
+/******************************************************************************
+* 功能：此函数保存配置文件模块，将系统sParame保存到配置文件中
+* @param mParame : sParame是保存配置信息结构体指针，
+* @param mPNum : smPNum是保存配置信息条数，
+* @return Descriptions
+******************************************************************************/
+static int writeSikoConfig(BASE::INTERACTION_THREAD_INFO *pTModule, const int mPNum)
+{
+  BASE::ConfData *sParame = (BASE::ConfData *)pTModule->mRecMsg.Datas;
+  int iRet = 0;
+  FILE *pFile = fopen(CONF::MN_INTERACTION_CONF_FILE, "rw+");
+
+  if(pFile == NULL)
+    return -1;
+
+  readConfig(mParames);
+  for (int i=0; i<DEF_SYS_MAX_ARMS_NUMS;i++)
+  {
+      if(sParame[i].mIsValid == 1)
+      {
+          mParames[i].mConfSaveSikoX = sParame[i].mConfSaveSikoX;
+          mParames[i].mConfSaveSikoY = sParame[i].mConfSaveSikoY;
+      }
+  }
+
+  //printf("%f \n",sParame[0].mConfSaveEncoderT);
+
+  for (int i=0; i<mPNum; i++)
+  {
+    fprintf(pFile, "%f %f %f %f %f %f %f %f %f %f %f\n",
+                                    mParames[i].mConfSaveWeight,
+                                    mParames[i].mConfSaveSikoX,
+                                    mParames[i].mConfSaveSikoY,
+                                    mParames[i].mConfSaveEncoderT,
+                                    mParames[i].mFollowKp,
+                                    mParames[i].mFollowKd,
+                                    mParames[i].mWn,
+                                    mParames[i].mCo,
+                                    mParames[i].mConfTension,
+                                    mParames[i].mInclinometerX,
+                                    mParames[i].mInclinometerY);
+    printf("%f %f %f %f %f %f %f %f %f %f %f\n",
+           mParames[i].mConfSaveWeight,
+           mParames[i].mConfSaveSikoX,
+           mParames[i].mConfSaveSikoY,
+           mParames[i].mConfSaveEncoderT,
+           mParames[i].mFollowKp,
+           mParames[i].mFollowKd,
+           mParames[i].mWn,
+           mParames[i].mCo,
+           mParames[i].mConfTension,
+           mParames[i].mInclinometerX,
+           mParames[i].mInclinometerY);
+  }
+  fclose(pFile);
+  //拷贝给leader线程
+  sendMsgToSupr(pTModule,BASE::CMD_CHANGE_ConfSaveSiko);
+
+  return iRet;
+}
+
 
 /******************************************************************************
 * 功能：此函数保将msg消息发送给上位机
@@ -465,6 +528,12 @@ void* threadEntry(void* pModule)
         //BASE::SaveConfData *mSavaConf = (BASE::SaveConfData *)pTModule->mRecMsg.Datas;
         writeConfig(pTModule, DEF_SYS_MAX_ARMS_NUMS);
         printf("interaction CMD Sava conf\n");
+        break;
+      }
+      case BASE::CMD_CHANGE_ConfSaveSiko:
+      {
+        //BASE::SaveConfData *mSavaConf = (BASE::SaveConfData *)pTModule->mRecMsg.Datas;
+        writeSikoConfig(pTModule, DEF_SYS_MAX_ARMS_NUMS);
         break;
       }
       case BASE::CMD_READ_CONF:

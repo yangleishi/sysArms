@@ -133,6 +133,8 @@ private:
     void showRunMessage(char *pShowMsg);
 
     void sendNotice(const int mRecId, const int pNotice, const int pValue, char *pData);
+    void sendNotice(const int mRecId, const int pNotice, const int pValue, const int pValue1,const int pValue2,const int pValue3);
+
 
     void sendNoticeLink(QString sIp, int port);
 
@@ -225,6 +227,8 @@ private:
     char recData[1000];
     QString  mServerIp;
     quint16  mServerPort;
+
+    BASE::ConfData mConfD[SYS_ARMS_MAX_SIZE];
 
 /****************************************UI中所有控件*********************************/
 private:

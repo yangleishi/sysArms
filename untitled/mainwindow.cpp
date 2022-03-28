@@ -466,6 +466,8 @@ void MainWindow::recNoticeMessages(QVariant mNotice)
         {
             if(mMsg.m_Value == 0)
                 showConfMessage((BASE::ConfData *)mMsg.m_MsgPData);
+
+            memcpy((char*)mConfD, mMsg.m_MsgPData, sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
             free(mMsg.m_MsgPData);
             break;
         }
@@ -579,6 +581,48 @@ void MainWindow::sendNotice(const int mRecId, const int pNotice, const int pValu
             break;
         }
     }
+}
+
+void MainWindow::sendNotice(const int mRecId, const int pNotice, const int pValue, const int pValue1,const int pValue2,const int pValue3)
+{
+    BASE::SigalMessages mMsg;
+    mMsg.m_Sender  = BASE::THREAD_ID_WIND;
+    mMsg.m_Reciver = mRecId;
+    mMsg.m_Notice  = pNotice;
+    mMsg.m_Value   = pValue;
+    mMsg.m_Value1[0] = pValue1;
+    mMsg.m_Value1[1] = pValue2;
+    mMsg.m_Value1[2] = pValue3;
+
+    mMsg.m_MsgPData = NULL;
+
+    QVariant varnt;
+    varnt.setValue(mMsg);
+    //发送消息
+
+    switch (mRecId)
+    {
+        case BASE::THREAD_ID_DRAWCURVE :{
+            emit signalNoticeToDrawCurve(varnt);
+            break;
+        }
+        case BASE::THREAD_ID_LINKER :{
+            emit signalNoticeToLinker(varnt);
+            break;
+        }
+        case BASE::THREAD_ID_CURVEWIND :{
+            emit signalDrawCurve(varnt);
+            break;
+        }
+        case BASE::THREAD_ID_CONFBEFF :{
+            emit signalNoticeToConfBeff(varnt);
+            break;
+        }
+        default: {
+            break;
+        }
+    }
+
 }
 
 /**********************************************************
@@ -1241,23 +1285,80 @@ void MainWindow::slotsButtonReSaveSiko()
 
 }
 
+/*X:0 Y:1,add:0 del:1 */
 void MainWindow::slotsButtonAddSikoX()
 {
-    qDebug()<<"sikoX add";
+    BASE::ConfData *mModulesConfDatas = (BASE::ConfData *)malloc(sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    memset((char*)mModulesConfDatas, 0, sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    //将手动停止发送给linker线程，
+    for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
+    {
+        if(mLiftRadioButton[i]->isChecked())
+        {
+            mModulesConfDatas[i].mIsValid = 1;
+            mModulesConfDatas[i].mConfSaveSikoX   = ui->conf_sikoX->text().toFloat() + 0.1;
+            mModulesConfDatas[i].mConfSaveSikoY      = ui->conf_sikoY->text().toFloat();
+        }
+    }
+
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_CONF_RUN_SIKO, 0,(char*)mModulesConfDatas);
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RCONF, 0, 0);
 }
 
 void MainWindow::slotsButtonDeSikoX()
 {
-    qDebug()<<"sikoX de";
+    BASE::ConfData *mModulesConfDatas = (BASE::ConfData *)malloc(sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    memset((char*)mModulesConfDatas, 0, sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    //将手动停止发送给linker线程，
+    for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
+    {
+        if(mLiftRadioButton[i]->isChecked())
+        {
+            mModulesConfDatas[i].mIsValid = 1;
+            mModulesConfDatas[i].mConfSaveSikoX   = ui->conf_sikoX->text().toFloat() - 0.1;
+            mModulesConfDatas[i].mConfSaveSikoY      = ui->conf_sikoY->text().toFloat();
+        }
+    }
+
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_CONF_RUN_SIKO, 0,(char*)mModulesConfDatas);
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RCONF, 0, 0);
 }
 
 void MainWindow::slotsButtonAddSikoY()
 {
-    qDebug()<<"sikoY add";
+    BASE::ConfData *mModulesConfDatas = (BASE::ConfData *)malloc(sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    memset((char*)mModulesConfDatas, 0, sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    //将手动停止发送给linker线程，
+    for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
+    {
+        if(mLiftRadioButton[i]->isChecked())
+        {
+            mModulesConfDatas[i].mIsValid = 1;
+            mModulesConfDatas[i].mConfSaveSikoX   = ui->conf_sikoX->text().toFloat();
+            mModulesConfDatas[i].mConfSaveSikoY      = ui->conf_sikoY->text().toFloat() + 0.1;
+        }
+    }
+
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_CONF_RUN_SIKO, 0,(char*)mModulesConfDatas);
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RCONF, 0, 0);
 }
 void MainWindow::slotsButtonDeSikoY()
 {
-    qDebug()<<"sikoY de";
+    BASE::ConfData *mModulesConfDatas = (BASE::ConfData *)malloc(sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    memset((char*)mModulesConfDatas, 0, sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+    //将手动停止发送给linker线程，
+    for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
+    {
+        if(mLiftRadioButton[i]->isChecked())
+        {
+            mModulesConfDatas[i].mIsValid = 1;
+            mModulesConfDatas[i].mConfSaveSikoX   = ui->conf_sikoX->text().toFloat();
+            mModulesConfDatas[i].mConfSaveSikoY      = ui->conf_sikoY->text().toFloat() - 0.1;
+        }
+    }
+
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_CONF_RUN_SIKO, 0,(char*)mModulesConfDatas);
+    sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RCONF, 0, 0);
 }
 
 void MainWindow::slotsButtonReadLevelXY()
@@ -1597,6 +1698,9 @@ void MainWindow::showCycMessage(BASE::ARMS_R_USE_MSG *pShowMsg)
 
         mMulticatMsg.mSikoX[i] = (pShowMsg[i].mSiko1*1000.0);
         mMulticatMsg.mSikoY[i] = (pShowMsg[i].mSiko2*1000.0);
+
+        mMulticatMsg.mSikoSRX[i] = mConfD[i].mConfSaveSikoX;
+        mMulticatMsg.mSikoSRY[i] = mConfD[i].mConfSaveSikoY;
     }
 
     //多播传输
@@ -1617,8 +1721,24 @@ void MainWindow::readData502()
           {
               slotsButtonRunStart();
           }
-          else {
+          else if(mMsg.mCmd==0){
               slotsButtonRunStop();
+          } else if(mMsg.mCmd==2){
+              BASE::ConfData *mModulesConfDatas = (BASE::ConfData *)malloc(sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+              memset((char*)mModulesConfDatas, 0, sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+              //将手动停止发送给linker线程，
+              for(int i=0; i<SYS_ARMS_MAX_SIZE; i++)
+              {
+                  if(mMsg.mMark[i] == 1)
+                  {
+                      mModulesConfDatas[i].mIsValid = 1;
+                      mModulesConfDatas[i].mConfSaveSikoX   = mMsg.mSikoSRX[i];
+                      mModulesConfDatas[i].mConfSaveSikoY   = mMsg.mSikoSRY[i];
+                  }
+              }
+
+              sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_CONF_RUN_SIKO, 0,(char*)mModulesConfDatas);
+              sendNotice(BASE::THREAD_ID_LINKER, BASE::MSG_NOTICE_RCONF, 0, 0);
           }
         }
         qDebug()<<" rec multicast "<<recSize;

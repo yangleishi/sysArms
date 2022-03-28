@@ -39,7 +39,7 @@
 #define AVG_SIZE    (9)
 
 //shui ping yi滤波尺寸
-#define LEVEL_AVG_SIZE    (199)
+#define LEVEL_AVG_SIZE    (399)
 
 #define XYV_AVG_SIZE    (1)
 
@@ -782,6 +782,7 @@ typedef struct: public THREAD_INFO_HEADER
 
   //level change siko direction
   int levelChangeSikoXYDirection[2];
+  float levelSikoXY_L;
 
   //rec motor cmd
   int                mIsNowMotorCmd;

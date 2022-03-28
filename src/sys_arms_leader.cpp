@@ -302,7 +302,7 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mRecUseMsg.mInclinometer1_y = pTModule->mRecMsg.mInclinometer1_x*0.001;     //单位为角度
   //水平仪器转换
   pTModule->mRecUseMsg.mInclinometer1_dertX = (pTModule->mRecUseMsg.mInclinometer1_x-pTModule->mConfParam->mInclinometerX)*0.0175/11.3;     //单位为rad
-  pTModule->mRecUseMsg.mInclinometer1_dertY = (pTModule->mRecUseMsg.mInclinometer1_y-pTModule->mConfParam->mInclinometerY)*0.0175/10.0;     //单位为rad
+  pTModule->mRecUseMsg.mInclinometer1_dertY = (pTModule->mRecUseMsg.mInclinometer1_y-pTModule->mConfParam->mInclinometerY)*0.0175/11.3;     //单位为rad
   //dert Inclinometer
   for (int i=0; i<LEVEL_AVG_SIZE; i++)
   {
@@ -314,11 +314,11 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mDertInclim[LEVEL_AVG_SIZE].y = (pTModule->mRecUseMsg.mInclinometer1_y-pTModule->mConfParam->mInclinometerY)*0.0175/11.3;
   pTModule->mRecUseMsg.mInclinometer1_dertX /= (LEVEL_AVG_SIZE+1.0);
   pTModule->mRecUseMsg.mInclinometer1_dertY /= (LEVEL_AVG_SIZE+1.0);
-  pTModule->mRecUseMsg.mLevelSiko1 = (0.5*sin(pTModule->mRecUseMsg.mInclinometer1_dertX));
-  pTModule->mRecUseMsg.mLevelSiko2 = (0.5*sin(pTModule->mRecUseMsg.mInclinometer1_dertY));
+  pTModule->mRecUseMsg.mLevelSiko1 = (pTModule->levelSikoXY_L*tan(pTModule->mRecUseMsg.mInclinometer1_dertX));
+  pTModule->mRecUseMsg.mLevelSiko2 = (pTModule->levelSikoXY_L*tan(pTModule->mRecUseMsg.mInclinometer1_dertY));
 
-  /*
-  if(strcmp(pTModule->mThreadName,"MN_SERVER4") == 0)
+/*
+  if(strcmp(pTModule->mThreadName,"MN_SERVER3") == 0)
         printf("recMsg:levelXY(%f %f) dertXY(%f %f) conf(%f %f)  mLevelSiko(%f %f)\n",
                pTModule->mRecUseMsg.mInclinometer1_x,
                pTModule->mRecUseMsg.mInclinometer1_y,
@@ -328,8 +328,28 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
                pTModule->mConfParam->mInclinometerY,
               pTModule->mRecUseMsg.mLevelSiko1,
               pTModule->mRecUseMsg.mLevelSiko2);
-  */
+*/
  /**********************************水平仪器转换 end************************************/
+
+  //采集三周期数据
+  //存储摆动角、拉力值
+  for (int i=2; i>=1; --i)
+  {
+    pTModule->mMagicControl.alfa_reco[i] = pTModule->mMagicControl.alfa_reco[i-1];
+    pTModule->mMagicControl.F_reco[i] = pTModule->mMagicControl.F_reco[i-1];
+  }
+  //编码器滤波,等新的编码器过来后测试
+  /*
+  if(abs(pTModule->mRecUseMsg.mEncoderTurns - pTModule->mMagicControl.alfa_reco[1]) > 0.005)
+    pTModule->mMagicControl.alfa_reco[0] = pTModule->mMagicControl.alfa_reco[1];
+  else
+    pTModule->mMagicControl.alfa_reco[0] = pTModule->mRecUseMsg.mEncoderTurns;
+  */
+  //pTModule->mMagicControl.alfa_reco[0] = deadZone(pTModule->mRecUseMsg.mEncoderTurns, 0.05);
+  pTModule->mMagicControl.alfa_reco[0] = pTModule->mRecUseMsg.mEncoderTurns;
+  //pTModule->mMagicControl.alfa_reco[0] = 0;
+
+  pTModule->mMagicControl.F_reco[0] = readTensionValue(pTModule);
 
 
   //ci shan chi zhuanhuan juedui
@@ -352,35 +372,14 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
   pTModule->mRecUseMsg.mSiko1 /= (AVG_SIZE+1.0);
   pTModule->mRecUseMsg.mSiko2 /= (AVG_SIZE+1.0);
 
-  //Inclim compensate Y
-  pTModule->mRecUseMsg.mSiko1       += (pTModule->mRecUseMsg.mLevelSiko1*pTModule->levelChangeSikoXYDirection[0]);
-  pTModule->mRecUseMsg.mSiko2       += (pTModule->mRecUseMsg.mLevelSiko2*pTModule->levelChangeSikoXYDirection[1]);
+  //**********Inclim compensate Y
+  //pTModule->mRecUseMsg.mSiko1   += (pTModule->mRecUseMsg.mLevelSiko1*pTModule->levelChangeSikoXYDirection[0]);
+  pTModule->mRecUseMsg.mSiko2   += (pTModule->mRecUseMsg.mLevelSiko2*pTModule->levelChangeSikoXYDirection[1] + 0.2*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])) );
 
  // printf("%f %d, %f %d\n", pTModule->mRecUseMsg.mSiko1,pTModule->mRecMsg.mSiko1, pTModule->mRecUseMsg.mSiko2,pTModule->mRecMsg.mSiko2);
 
 
-  //采集三周期数据
-  //存储摆动角、拉力值
-  for (int i=2; i>=1; --i)
-  {
-    pTModule->mMagicControl.alfa_reco[i] = pTModule->mMagicControl.alfa_reco[i-1];
-    pTModule->mMagicControl.F_reco[i] = pTModule->mMagicControl.F_reco[i-1];
-  }
 
-  //编码器滤波,等新的编码器过来后测试
-  /*
-  if(abs(pTModule->mRecUseMsg.mEncoderTurns - pTModule->mMagicControl.alfa_reco[1]) > 0.005)
-    pTModule->mMagicControl.alfa_reco[0] = pTModule->mMagicControl.alfa_reco[1];
-  else
-    pTModule->mMagicControl.alfa_reco[0] = pTModule->mRecUseMsg.mEncoderTurns;
-  */
-
-  //pTModule->mMagicControl.alfa_reco[0] = deadZone(pTModule->mRecUseMsg.mEncoderTurns, 0.05);
-  pTModule->mMagicControl.alfa_reco[0] = pTModule->mRecUseMsg.mEncoderTurns;
-
-  //pTModule->mMagicControl.alfa_reco[0] = 0;
-
-  pTModule->mMagicControl.F_reco[0] = readTensionValue(pTModule);
 }
 
 /******************************************************************************
@@ -1215,9 +1214,9 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
 
   //x y轴设置死区间.
   //502修改算法死区
-  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.01);
-  //mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.002);
-  mRopeEndL.y =  deadZone((pTModule->mRecUseMsg.mSiko2+0.1*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK), 0.003);
+  mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0015);
+  mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.0015);
+  //mRopeEndL.y =  deadZone((pTModule->mRecUseMsg.mSiko2+0.2*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK), 0.0015);
   //printf("++++++siko_y:%f, alf:%f %f",pTModule->mRecUseMsg.mSiko2,pTModule->mMagicControl.alfa_reco[0],  10.0*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])) );
 
   BASE::ACC_2 mAcc;

@@ -224,6 +224,19 @@ int ThreadLinker::recSignalSaveConf(BASE::ConfData *pConfData)
     return 0;
 }
 
+int ThreadLinker::recSignalConfSikoCmdModule(BASE::ConfData *pData)
+{
+    //拷贝下发控制命令数据
+    if(sysIsLinked)
+        sendControlCmd(BASE::CMD_CHANGE_ConfSaveSiko, (char*)pData, sizeof(BASE::ConfData)*SYS_ARMS_MAX_SIZE);
+
+    for (int i=0; i<8; i++)
+    {
+        qDebug() <<pData[i].mInclinomenterX << " "<<pData[i].mInclinomenterY;
+    }
+
+}
+
 int ThreadLinker::recSignalCalibrate(BASE::CalibrateData *pData)
 {
     //拷贝下发控制命令数据
@@ -670,6 +683,11 @@ void ThreadLinker::recNoticeMessages(QVariant mNotice)
             case BASE::MSG_NOTICE_ALL_PULL_STOP :{
                 //请求移动
                 recSignalLiftCmdModule(mMsg.m_Notice, 0);
+                break;
+            }
+            case BASE::MSG_NOTICE_CONF_RUN_SIKO :{
+                //运行界面下 开始
+                recSignalConfSikoCmdModule((BASE::ConfData *)mMsg.m_MsgPData);
                 break;
             }
             case BASE::MSG_NOTICE_RUN_START :{
