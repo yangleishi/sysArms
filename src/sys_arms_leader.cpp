@@ -374,7 +374,10 @@ static void reformRecMsg(BASE::ARMS_THREAD_INFO *pTModule)
 
   //**********Inclim compensate Y
   //pTModule->mRecUseMsg.mSiko1   += (pTModule->mRecUseMsg.mLevelSiko1*pTModule->levelChangeSikoXYDirection[0]);
-  pTModule->mRecUseMsg.mSiko2   += (pTModule->mRecUseMsg.mLevelSiko2*pTModule->levelChangeSikoXYDirection[1] + 0.2*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])) );
+  pTModule->mRecUseMsg.mSiko2   += pTModule->mRecUseMsg.mLevelSiko2*pTModule->levelChangeSikoXYDirection[1];
+  //if siko > 9 t
+  if(fabs(pTModule->mRecUseMsg.mSiko2) < 9)
+    pTModule->mRecUseMsg.mSiko2   += 0.2*(1.0-cos(pTModule->mMagicControl.alfa_reco[0]));
 
  // printf("%f %d, %f %d\n", pTModule->mRecUseMsg.mSiko1,pTModule->mRecMsg.mSiko1, pTModule->mRecUseMsg.mSiko2,pTModule->mRecMsg.mSiko2);
 
@@ -781,8 +784,7 @@ static int32_t runningPhase(BASE::ARMS_THREAD_INFO *pTModule)
       if(*(pTModule->mIsRun) == 1)
       {
           followagic(pTModule);
-          if(strcmp(pTModule->mThreadName, "MN_SERVER1") != 0)  //arms1 only follow
-            pullMagic(pTModule);//函数计算出收放收缩加速度。
+          pullMagic(pTModule);//函数计算出收放收缩加速度。
       }else if (*(pTModule->mIsRun) == 2) {
           followagic(pTModule);
       }else if (*(pTModule->mIsRun) == 3) {
@@ -1112,10 +1114,20 @@ static int32_t pullMagic(BASE::ARMS_THREAD_INFO *pTModule)
   f_estimate /= (AVG_SIZE+1.0);
 
 
-
+  float dd_Lz = 0;
   /**********************************/
-  float dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
-                0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
+  // server1 not use d_f_measure
+  if(strcmp(pTModule->mThreadName, "MN_SERVER1") == 0)
+  {
+    dd_Lz = (-f_estimate + 0.2*d_f_measure)/mM  +
+             0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
+  }else
+  {
+    dd_Lz = (-f_estimate + 0.0*d_f_measure)/mM  +
+               0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
+  }
+
+
 
   //float dd_Lz = (-f_estimate + 0.0*d_f_measure)/mM  +
   //              0.2*((2*mCo*mWn*d_alfi_measure+pow(mWn,2)*alfa_m)*pControl->mK1 - pControl->mK*pControl->mL*alfa_m)/mM;
@@ -1215,7 +1227,7 @@ static int32_t followagic(BASE::ARMS_THREAD_INFO *pTModule)
   //x y轴设置死区间.
   //502修改算法死区
   mRopeEndL.x =  deadZone(pTModule->mRecUseMsg.mSiko1*(sikoK), 0.0015);
-  mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.0015);
+  mRopeEndL.y =  deadZone(pTModule->mRecUseMsg.mSiko2*(sikoK), 0.001);
   //mRopeEndL.y =  deadZone((pTModule->mRecUseMsg.mSiko2+0.2*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])))*(sikoK), 0.0015);
   //printf("++++++siko_y:%f, alf:%f %f",pTModule->mRecUseMsg.mSiko2,pTModule->mMagicControl.alfa_reco[0],  10.0*(1.0-cos(pTModule->mMagicControl.alfa_reco[0])) );
 
